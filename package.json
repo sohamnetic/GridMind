@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "sim:train": "tsx scripts/train.ts",
-    "sim:race": "tsx scripts/race.ts"
+    "sim:race": "tsx scripts/race.ts",
+    "sim:lap": "tsx scripts/lap.ts"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",

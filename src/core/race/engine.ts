@@ -1,0 +1,579 @@
+import { createRng, nextFloat, nextGaussian, nextInt, nextRange, type Rng } from '../math/rng'
+import type { TrackProfile } from '../profile/trackProfile'
+import { DRIVERS, TEAMS } from './grid'
+import {
+  bestDryCompound,
+  raceParams,
+  usesTwoDryCompounds,
+  type PitStop,
+  type RaceParams,
+  type Strategy,
+} from './strategy'
+import {
+  bestForConditions,
+  COMPOUNDS,
+  conditionsPenalty,
+  degradation,
+  modePace,
+  wearPerLap,
+  type Compound,
+  type DriveMode,
+} from './tyres'
+import { advanceWeather, createWeather, type Weather } from './weather'
+
+/**
+ * Lap-by-lap race engine.
+ *
+ * One call to stepLap runs one lap for the whole field. A race is a plain
+ * object with its random generator inside it, so it can be cloned at any lap
+ * and continued along several different futures: that is what the strategy
+ * optimiser and the pit-wall debrief are built on.
+ */
+
+export interface RaceSetup {
+  profile: TrackProfile
+  laps: number
+  seed: number
+  /** Probability of rain at some point in the race (0..1). */
+  rainChance: number
+  /** Field size, up to the number of drivers. */
+  cars: number
+  /** Dry strategies the computer-run cars choose from, best first. */
+  plans: Strategy[]
+  /** Cars (driver indices) that take orders instead of deciding for themselves. */
+  manual?: number[]
+  /** Keep per-lap history for charts (default true). Turn off for bulk simulation. */
+  record?: boolean
+  /** Multiplier on retirements and safety cars (default 1). */
+  incidents?: number
+}
+
+export type SafetyCar = 'none' | 'vsc' | 'sc'
+
+export interface Stint {
+  compound: Compound
+  /** First and last lap run on this set (1-based, inclusive). */
+  from: number
+  to: number
+}
+
+export interface CarRace {
+  /** Index into DRIVERS; also this car's index in RaceState.cars. */
+  driver: number
+  running: boolean
+  /** Lap on which the car retired, or 0. */
+  outLap: number
+  /** Race time at the last crossing of the line (s). */
+  time: number
+  laps: number
+  /** Current position, 1 = leading. */
+  position: number
+  grid: number
+  compound: Compound
+  /** Share of the tyre's life used; past about 0.8 it falls off the cliff. */
+  wear: number
+  tyreAge: number
+  fuel: number
+  mode: DriveMode
+  stops: number
+  used: Compound[]
+  /** Planned stops still to come. */
+  plan: PitStop[]
+  lastLap: number
+  bestLap: number
+  /** Time penalty applied at the flag (s). */
+  penalty: number
+  /** Lap time as a fraction above the field's base lap, from the car and driver. */
+  pace: number
+  /**
+   * How readily this car's pit wall changes tyres when the weather turns,
+   * -1 (waits it out) .. +1 (first to blink). Teams do not all stop on the same lap.
+   */
+  nerve: number
+  // History, when recording.
+  lapTimes: number[]
+  positions: number[]
+  gaps: number[]
+  stints: Stint[]
+}
+
+export type RaceLogType =
+  | 'pit'
+  | 'overtake'
+  | 'sc'
+  | 'vsc'
+  | 'green'
+  | 'rain'
+  | 'dry'
+  | 'out'
+  | 'fastest'
+  | 'slowstop'
+  | 'penalty'
+  | 'flag'
+
+export interface RaceLog {
+  lap: number
+  type: RaceLogType
+  car?: number
+  other?: number
+  compound?: Compound
+  value?: number
+}
+
+export interface RaceState {
+  /** Laps completed. */
+  lap: number
+  totalLaps: number
+  cars: CarRace[]
+  /** Car indices in race order, leader first; retired cars last. */
+  order: number[]
+  rng: Rng
+  weather: Weather
+  safetyCar: SafetyCar
+  /** Laps the current safety car period still has to run. */
+  safetyLaps: number
+  fastestLap: number
+  fastestCar: number
+  log: RaceLog[]
+  finished: boolean
+}
+
+/** What a car can be told before a lap: stop at the end of it, and how hard to drive. */
+export interface CarOrder {
+  pit?: Compound
+  mode?: DriveMode
+}
+
+/** Closest two cars can cross the line (s). */
+const MIN_GAP = 0.3
+const SC_LAP = 1.45
+const SC_CATCH_LAP = 1.2
+const VSC_LAP = 1.35
+const SC_GAP = 0.6
+const RULE_PENALTY = 30
+
+/** Lap-time fraction lost by the slowest team's car to the fastest. */
+const TEAM_SPREAD = 0.22
+
+function carPace(driver: number): number {
+  const team = TEAMS[DRIVERS[driver].team]
+  // A fixed, small driver-to-driver difference: up to about 0.2 % either way.
+  const skill = (((driver * 37) % 11) - 5) * 0.0004
+  return (1 - team.pace) * TEAM_SPREAD + skill
+}
+
+export function createRace(setup: RaceSetup): RaceState {
+  const rng = createRng(setup.seed)
+  const params = raceParams(setup.profile, setup.laps)
+  const weather = createWeather(rng, setup.laps, setup.rainChance)
+  const count = Math.min(setup.cars, DRIVERS.length)
+  const record = setup.record !== false
+
+  // Qualifying: pace plus a little luck decides the grid.
+  const quali = Array.from({ length: count }, (_, i) => ({ i, t: carPace(i) + nextGaussian(rng, 0, 0.0015) }))
+  quali.sort((a, b) => a.t - b.t)
+  const grid = new Array<number>(count)
+  quali.forEach((q, slot) => (grid[q.i] = slot + 1))
+
+  const startType = bestForConditions(weather.wetness)
+  const cars: CarRace[] = []
+  for (let i = 0; i < count; i++) {
+    // Each team picks one of the leading strategies and shifts its stops a lap or two.
+    const pick = nextFloat(rng)
+    const plan = setup.plans.length === 0 ? null : setup.plans[Math.min(setup.plans.length - 1, pick < 0.5 ? 0 : pick < 0.8 ? 1 : 2)]
+    const stops: PitStop[] = []
+    if (plan) {
+      let prev = 0
+      for (const stop of plan.stops) {
+        const lap = Math.min(setup.laps - 2, Math.max(prev + 2, stop.lap + nextInt(rng, -2, 2)))
+        stops.push({ lap, compound: stop.compound })
+        prev = lap
+      }
+    }
+    const compound: Compound = startType === 'dry' ? (plan?.start ?? 'medium') : startType
+    cars.push({
+      driver: i,
+      running: true,
+      outLap: 0,
+      time: 0,
+      laps: 0,
+      position: grid[i],
+      grid: grid[i],
+      compound,
+      wear: 0,
+      tyreAge: 0,
+      fuel: params.fuelStart,
+      mode: 'normal',
+      stops: 0,
+      used: [compound],
+      plan: stops,
+      lastLap: 0,
+      bestLap: Infinity,
+      penalty: 0,
+      pace: carPace(i),
+      nerve: nextRange(rng, -1, 1),
+      lapTimes: [],
+      positions: record ? [grid[i]] : [],
+      gaps: record ? [0] : [],
+      stints: record ? [{ compound, from: 1, to: 0 }] : [],
+    })
+  }
+
+  return {
+    lap: 0,
+    totalLaps: setup.laps,
+    cars,
+    order: quali.map((q) => q.i),
+    rng,
+    weather,
+    safetyCar: 'none',
+    safetyLaps: 0,
+    fastestLap: Infinity,
+    fastestCar: -1,
+    log: [],
+    finished: false,
+  }
+}
+
+/** Deep copy of a race, random generator included: the copy continues identically. */
+export function cloneRace(state: RaceState): RaceState {
+  return {
+    ...state,
+    cars: state.cars.map((c) => ({
+      ...c,
+      used: c.used.slice(),
+      plan: c.plan.map((s) => ({ ...s })),
+      lapTimes: c.lapTimes.slice(),
+      positions: c.positions.slice(),
+      gaps: c.gaps.slice(),
+      stints: c.stints.map((s) => ({ ...s })),
+    })),
+    order: state.order.slice(),
+    rng: { state: state.rng.state },
+    weather: { ...state.weather, plan: state.weather.plan },
+    log: state.log.slice(),
+  }
+}
+
+/** Clean-air lap time for a car in its current state, before traffic and luck (s). */
+export function idealLap(car: CarRace, wetness: number, params: RaceParams): number {
+  return (
+    params.baseLap * (1 + car.pace) +
+    params.scale *
+      (COMPOUNDS[car.compound].pace +
+        degradation(car.compound, car.wear) +
+        conditionsPenalty(car.compound, wetness) +
+        modePace(car.mode)) +
+    car.fuel * params.fuelPenalty
+  )
+}
+
+/**
+ * Whether stopping now for fresh tyres is quicker to the flag than nursing
+ * the current set home, on a dry track.
+ */
+function worthStopping(car: CarRace, remaining: number, params: RaceParams): boolean {
+  const rate = wearPerLap(car.compound, params.tyreStress, car.mode, car.fuel / params.fuelStart, 0)
+  let stay = 0
+  for (let k = 1; k <= remaining; k++) {
+    stay += COMPOUNDS[car.compound].pace + degradation(car.compound, car.wear + k * rate)
+  }
+  const fresh = bestDryCompound(remaining, car.fuel, params)
+  const freshRate = wearPerLap(fresh, params.tyreStress, 'normal', car.fuel / params.fuelStart, 0)
+  let stop = (params.pitLoss + params.stationary) / params.scale
+  for (let k = 0; k < remaining; k++) stop += COMPOUNDS[fresh].pace + degradation(fresh, k * freshRate)
+  return stop + 1 < stay
+}
+
+/**
+ * What a computer-run car does about its tyres before a lap: returns the
+ * compound to stop for at the end of the lap, or null to stay out.
+ */
+export function aiPitCall(car: CarRace, state: RaceState, params: RaceParams): Compound | null {
+  const lapNo = state.lap + 1
+  const remaining = state.totalLaps - lapNo
+  if (remaining < 1) return null
+  const { wetness, plan } = state.weather
+  const ahead = ((plan[lapNo] ?? 0) + (plan[lapNo + 1] ?? 0) + (plan[lapNo + 2] ?? 0)) / 3
+  const want = bestForConditions(wetness)
+  const onDry = COMPOUNDS[car.compound].dry
+  // Thresholds shift a little from one pit wall to the next.
+  const shift = car.nerve * 0.06
+
+  const dryChoice = (): Compound => {
+    // The last planned stop must leave the car legal under the two-compound rule.
+    const dryUsed = car.used.filter((c) => COMPOUNDS[c].dry)
+    const rainUsed = car.used.length > dryUsed.length
+    const needOther = !rainUsed && new Set(dryUsed).size < 2 && car.plan.length <= 1
+    const planned = car.plan[0]?.compound
+    if (planned && COMPOUNDS[planned].dry && !(needOther && dryUsed.includes(planned))) return planned
+    return bestDryCompound(remaining, car.fuel - params.fuelPerLap, params, needOther ? dryUsed : [])
+  }
+
+  // 1. The wrong kind of tyre for the conditions.
+  if (onDry) {
+    if (want !== 'dry' && (wetness > 0.42 - shift || (wetness > 0.3 - shift && ahead > 0.3))) {
+      return want === 'wet' ? 'wet' : 'inter'
+    }
+  } else {
+    if (want === 'dry' && wetness < 0.22 + shift && ahead < 0.1) return dryChoice()
+    if (car.compound === 'inter' && want === 'wet' && wetness > 0.88 - shift) return 'wet'
+    if (car.compound === 'wet' && want !== 'wet' && wetness < 0.55 + shift) {
+      return want === 'dry' ? dryChoice() : 'inter'
+    }
+    if (car.wear > 0.95 && remaining >= 3) return car.compound
+    return null
+  }
+
+  // 2. Tyres finished: stop only if a fresh set repays the stop before the flag.
+  if (car.wear > 0.85 && remaining >= 2 && worthStopping(car, remaining, params)) return dryChoice()
+
+  // 3. The planned stop.
+  const next = car.plan[0]
+  if (next && lapNo >= next.lap) return dryChoice()
+
+  // 4. A cheap stop under the safety car, if one was coming anyway.
+  if (state.safetyCar !== 'none' && car.tyreAge >= 5 && remaining >= 4) {
+    if ((next && next.lap - lapNo <= 10) || car.wear > 0.5) return dryChoice()
+  }
+  return null
+}
+
+/**
+ * Runs one lap for every car.
+ *
+ * @param orders instructions for manual cars, keyed by driver index
+ */
+export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<number, CarOrder> = {}): void {
+  if (state.finished) return
+  const params = raceParams(setup.profile, setup.laps)
+  const { rng, cars } = state
+  const lapNo = state.lap + 1
+  const record = setup.record !== false
+  const incidents = setup.incidents ?? 1
+  const manual = setup.manual ?? []
+  const log = (entry: Omit<RaceLog, 'lap'>) => state.log.push({ lap: lapNo, ...entry })
+
+  // --- Weather for this lap ---
+  const wasRaining = state.weather.rain > 0
+  advanceWeather(state.weather, lapNo - 1)
+  if (!wasRaining && state.weather.rain > 0) log({ type: 'rain', value: state.weather.rain })
+  if (wasRaining && state.weather.rain === 0) log({ type: 'dry' })
+  const wetness = state.weather.wetness
+  const safety = state.safetyCar
+
+  // --- Retirements, which can bring out a safety car for the following laps ---
+  let deploy: SafetyCar = 'none'
+  for (const i of state.order) {
+    const car = cars[i]
+    if (!car.running) continue
+    const mismatch = conditionsPenalty(car.compound, wetness)
+    let risk = 0.001 + 0.001 * wetness + (mismatch > 3 ? 0.012 : 0) + (car.wear > 1.15 ? 0.01 : 0)
+    if (lapNo === 1) risk += 0.006
+    if (safety !== 'none') risk *= 0.2
+    if (nextFloat(rng) < risk * incidents) {
+      car.running = false
+      car.outLap = lapNo
+      log({ type: 'out', car: i })
+      if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2) {
+        const roll = nextFloat(rng)
+        deploy = roll < 0.4 ? 'sc' : roll < 0.7 ? 'vsc' : 'none'
+      }
+    }
+  }
+  if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2 && nextFloat(rng) < 0.003 * incidents) {
+    deploy = nextFloat(rng) < 0.4 ? 'sc' : 'vsc'
+  }
+
+  // --- Lap times, in running order ---
+  const speedFactor = safety === 'sc' ? 0.4 : safety === 'vsc' ? 0.6 : 1
+  const need = (0.3 + 2.2 * params.overtakingDifficulty) * (lapNo === 1 ? 0.6 : 1)
+  let blockCross = -Infinity // crossing time of the car directly ahead on the road
+  let blockLap = 0 // that car's lap time this lap
+  let blockCar = -1
+  let beforeBlock = -Infinity // and of the car ahead of it
+
+  for (const i of state.order) {
+    const car = cars[i]
+    if (!car.running) continue
+
+    // Orders for this lap.
+    let pit: Compound | null = null
+    if (manual.includes(i)) {
+      const order = orders[i]
+      if (order?.mode) car.mode = order.mode
+      if (order?.pit) pit = order.pit
+    } else {
+      pit = aiPitCall(car, state, params)
+    }
+
+    let lap = idealLap(car, wetness, params) + nextGaussian(rng, 0, 0.22 * params.scale)
+    if (nextFloat(rng) < 0.01) lap += nextRange(rng, 1, 3) * params.scale // a lock-up or a moment
+    if (lapNo === 1) lap += 4 * params.scale + (car.grid - 1) * 0.18 // standing start, from further back
+
+    let pitTime = 0
+    if (pit) {
+      let stationary = Math.max(1.9, nextGaussian(rng, params.stationary, 0.35))
+      if (nextFloat(rng) < 0.04) {
+        stationary += nextRange(rng, 3, 9)
+        log({ type: 'slowstop', car: i, value: stationary })
+      }
+      // The pit lane costs far less while the field is circulating slowly.
+      const lane = params.pitLoss * (safety === 'sc' ? 0.45 : safety === 'vsc' ? 0.6 : 1)
+      pitTime = lane + stationary
+    }
+
+    let cross: number
+    if (safety === 'sc') {
+      // Catch the queue, then sit in it.
+      const pace = blockCross === -Infinity ? SC_LAP : SC_CATCH_LAP
+      cross = car.time + Math.max(params.baseLap * pace, lap * 0.9) + pitTime
+      if (!pit && blockCross !== -Infinity) cross = Math.max(cross, blockCross + SC_GAP)
+    } else if (safety === 'vsc') {
+      cross = car.time + Math.max(lap, params.baseLap * VSC_LAP) + pitTime
+      if (!pit && blockCross !== -Infinity) cross = Math.max(cross, blockCross + MIN_GAP)
+    } else {
+      cross = car.time + lap + pitTime
+      if (!pit && cross < blockCross + MIN_GAP) {
+        // Caught the car ahead: a pass needs a real pace advantage, more on a tight circuit.
+        const advantage = (blockLap - lap) / params.scale
+        const chance = advantage <= 0 ? 0 : Math.min(0.92, 1 - Math.exp(-Math.max(0, advantage - 0.3 * need) / need))
+        if (nextFloat(rng) < chance) {
+          cross = Math.max(cross + 0.2 * params.scale, beforeBlock + MIN_GAP)
+          addTime(cars[blockCar], 0.1 * params.scale, record) // the defending car loses a little too
+          log({ type: 'overtake', car: i, other: blockCar })
+        } else {
+          cross = blockCross + MIN_GAP + nextRange(rng, 0, 0.25)
+        }
+      }
+    }
+
+    // The recorded lap is line to line, so it includes any time spent in the pits.
+    lap = cross - car.time
+
+    // --- The car's own state after the lap ---
+    car.wear += wearPerLap(car.compound, params.tyreStress, car.mode, car.fuel / params.fuelStart, wetness) * speedFactor
+    car.fuel = Math.max(0, car.fuel - params.fuelPerLap * (safety === 'sc' ? 0.5 : safety === 'vsc' ? 0.7 : 1))
+    car.tyreAge++
+    car.time = cross
+    car.laps = lapNo
+    car.lastLap = lap
+    if (record) car.lapTimes.push(lap)
+    if (safety === 'none' && !pit && lapNo > 1 && lap < car.bestLap) {
+      car.bestLap = lap
+      if (lap < state.fastestLap) {
+        state.fastestLap = lap
+        state.fastestCar = i
+      }
+    }
+
+    if (pit) {
+      if (record) car.stints[car.stints.length - 1].to = lapNo
+      car.compound = pit
+      car.wear = 0
+      car.tyreAge = 0
+      car.stops++
+      if (!car.used.includes(pit)) car.used.push(pit)
+      // A stop within reach of a planned one counts as that stop.
+      if (car.plan.length > 0 && car.plan[0].lap - lapNo <= 10) car.plan.shift()
+      if (record) car.stints.push({ compound: pit, from: lapNo + 1, to: 0 })
+      log({ type: 'pit', car: i, compound: pit, value: pitTime })
+    } else if (cross > blockCross) {
+      // A car in the pit lane holds nobody up; otherwise this car is the next one's obstacle.
+      beforeBlock = blockCross
+      blockCross = cross
+      blockLap = lap
+      blockCar = i
+    } else {
+      beforeBlock = Math.max(beforeBlock, cross)
+    }
+  }
+
+  // --- New running order ---
+  state.order.sort((a, b) => {
+    const ca = cars[a]
+    const cb = cars[b]
+    if (ca.running !== cb.running) return ca.running ? -1 : 1
+    if (!ca.running) return cb.outLap - ca.outLap || a - b
+    return ca.time - cb.time || a - b
+  })
+  if (safety === 'sc') {
+    // Cars rejoining from the pits slot into the queue rather than sharing a piece of road.
+    let prev = -Infinity
+    for (const i of state.order) {
+      const car = cars[i]
+      if (!car.running) break
+      if (car.time < prev + 0.4) addTime(car, prev + 0.4 - car.time, record)
+      prev = car.time
+    }
+  }
+  const leaderTime = cars[state.order[0]].time
+  state.order.forEach((i, p) => {
+    const car = cars[i]
+    car.position = p + 1
+    if (record && car.running) {
+      car.positions.push(p + 1)
+      car.gaps.push(car.time - leaderTime)
+    }
+  })
+
+  // --- Safety car bookkeeping ---
+  if (safety !== 'none') {
+    state.safetyLaps--
+    if (state.safetyLaps <= 0) {
+      state.safetyCar = 'none'
+      log({ type: 'green' })
+    }
+  } else if (deploy !== 'none') {
+    state.safetyCar = deploy
+    state.safetyLaps = deploy === 'sc' ? nextInt(rng, 3, 5) : nextInt(rng, 1, 2)
+    log({ type: deploy })
+  }
+
+  state.lap = lapNo
+  if (lapNo >= state.totalLaps) finishRace(state, record)
+}
+
+/** Adds time to a lap a car has already completed, keeping its history in step. */
+function addTime(car: CarRace, seconds: number, record: boolean): void {
+  car.time += seconds
+  car.lastLap += seconds
+  if (record && car.lapTimes.length > 0) car.lapTimes[car.lapTimes.length - 1] += seconds
+}
+
+function finishRace(state: RaceState, record: boolean): void {
+  const { cars } = state
+  for (const car of cars) {
+    if (record && car.stints.length > 0 && car.stints[car.stints.length - 1].to === 0) {
+      car.stints[car.stints.length - 1].to = car.running ? state.totalLaps : car.outLap
+    }
+    if (!car.running) continue
+    // Two dry compounds are compulsory unless rain tyres were used.
+    const rainUsed = car.used.some((c) => !COMPOUNDS[c].dry)
+    if (!rainUsed && !usesTwoDryCompounds(car.used)) {
+      car.penalty = RULE_PENALTY
+      car.time += RULE_PENALTY
+      state.log.push({ lap: state.totalLaps, type: 'penalty', car: car.driver, value: RULE_PENALTY })
+    }
+  }
+  state.order.sort((a, b) => {
+    const ca = cars[a]
+    const cb = cars[b]
+    if (ca.running !== cb.running) return ca.running ? -1 : 1
+    if (!ca.running) return cb.outLap - ca.outLap || a - b
+    return ca.time - cb.time || a - b
+  })
+  state.order.forEach((i, p) => (cars[i].position = p + 1))
+  if (state.fastestCar >= 0) {
+    state.log.push({ lap: state.totalLaps, type: 'fastest', car: state.fastestCar, value: state.fastestLap })
+  }
+  state.log.push({ lap: state.totalLaps, type: 'flag', car: state.order[0] })
+  state.finished = true
+}
+
+/** Runs a whole race with every car deciding for itself. */
+export function runRace(setup: RaceSetup): RaceState {
+  const state = createRace(setup)
+  while (!state.finished) stepLap(state, setup)
+  return state
+}
