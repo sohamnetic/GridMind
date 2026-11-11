@@ -1,4 +1,4 @@
-import { createRng, nextFloat, nextGaussian, nextInt, nextRange, type Rng } from '../math/rng'
+import { createRng, deriveSeed, nextFloat, nextGaussian, nextInt, nextRange, type Rng } from '../math/rng'
 import type { TrackProfile } from '../profile/trackProfile'
 import { DRIVERS, TEAMS } from './grid'
 import {
@@ -42,6 +42,13 @@ export interface RaceSetup {
   plans: Strategy[]
   /** Cars (driver indices) that take orders instead of deciding for themselves. */
   manual?: number[]
+  /**
+   * One car given an exact strategy to start from instead of picking from
+   * `plans`. Its pit wall still reacts to rain, safety cars and dead tyres
+   * like any other. The rest of the field is unchanged by this: the same seed
+   * gives the same grid, weather and rival plans whatever the strategy is.
+   */
+  player?: { driver: number; strategy: Strategy }
   /** Keep per-lap history for charts (default true). Turn off for bulk simulation. */
   record?: boolean
   /** Multiplier on retirements and safety cars (default 1). */
@@ -128,6 +135,13 @@ export interface RaceState {
   /** Car indices in race order, leader first; retired cars last. */
   order: number[]
   rng: Rng
+  /**
+   * Seed of the retirement and safety-car rolls, which are drawn afresh for
+   * each lap from this and the lap number. Keeping them off the main stream
+   * means two races that differ only in one car's strategy see the same
+   * incidents at the same moments, so the comparison is about the strategy.
+   */
+  incidentSeed: number
   weather: Weather
   safetyCar: SafetyCar
   /** Laps the current safety car period still has to run. */
@@ -180,8 +194,8 @@ export function createRace(setup: RaceSetup): RaceState {
   for (let i = 0; i < count; i++) {
     // Each team picks one of the leading strategies and shifts its stops a lap or two.
     const pick = nextFloat(rng)
-    const plan = setup.plans.length === 0 ? null : setup.plans[Math.min(setup.plans.length - 1, pick < 0.5 ? 0 : pick < 0.8 ? 1 : 2)]
-    const stops: PitStop[] = []
+    let plan = setup.plans.length === 0 ? null : setup.plans[Math.min(setup.plans.length - 1, pick < 0.5 ? 0 : pick < 0.8 ? 1 : 2)]
+    let stops: PitStop[] = []
     if (plan) {
       let prev = 0
       for (const stop of plan.stops) {
@@ -189,6 +203,11 @@ export function createRace(setup: RaceSetup): RaceState {
         stops.push({ lap, compound: stop.compound })
         prev = lap
       }
+    }
+    // The player's car draws the same numbers as it would have, then takes its own plan as written.
+    if (setup.player?.driver === i) {
+      plan = setup.player.strategy
+      stops = plan.stops.map((s) => ({ ...s }))
     }
     const compound: Compound = startType === 'dry' ? (plan?.start ?? 'medium') : startType
     cars.push({
@@ -225,6 +244,7 @@ export function createRace(setup: RaceSetup): RaceState {
     cars,
     order: quali.map((q) => q.i),
     rng,
+    incidentSeed: deriveSeed(setup.seed, 7919),
     weather,
     safetyCar: 'none',
     safetyLaps: 0,
@@ -363,26 +383,33 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
   const safety = state.safetyCar
 
   // --- Retirements, which can bring out a safety car for the following laps ---
+  // Every roll comes from this lap's own stream, in a fixed order, so one
+  // car's luck does not depend on what the others did.
+  const incident = createRng(deriveSeed(state.incidentSeed, lapNo))
+  const deployRoll = nextFloat(incident)
+  const strayRoll = nextFloat(incident)
+  const strayKind = nextFloat(incident)
+  const lengthRoll = nextFloat(incident)
   let deploy: SafetyCar = 'none'
-  for (const i of state.order) {
+  for (let i = 0; i < cars.length; i++) {
     const car = cars[i]
+    const roll = nextFloat(incident)
     if (!car.running) continue
     const mismatch = conditionsPenalty(car.compound, wetness)
     let risk = 0.001 + 0.001 * wetness + (mismatch > 3 ? 0.012 : 0) + (car.wear > 1.15 ? 0.01 : 0)
     if (lapNo === 1) risk += 0.006
     if (safety !== 'none') risk *= 0.2
-    if (nextFloat(rng) < risk * incidents) {
+    if (roll < risk * incidents) {
       car.running = false
       car.outLap = lapNo
       log({ type: 'out', car: i })
       if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2) {
-        const roll = nextFloat(rng)
-        deploy = roll < 0.4 ? 'sc' : roll < 0.7 ? 'vsc' : 'none'
+        deploy = deployRoll < 0.4 ? 'sc' : deployRoll < 0.7 ? 'vsc' : 'none'
       }
     }
   }
-  if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2 && nextFloat(rng) < 0.003 * incidents) {
-    deploy = nextFloat(rng) < 0.4 ? 'sc' : 'vsc'
+  if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2 && strayRoll < 0.003 * incidents) {
+    deploy = strayKind < 0.4 ? 'sc' : 'vsc'
   }
 
   // --- Lap times, in running order ---
@@ -526,7 +553,7 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
     }
   } else if (deploy !== 'none') {
     state.safetyCar = deploy
-    state.safetyLaps = deploy === 'sc' ? nextInt(rng, 3, 5) : nextInt(rng, 1, 2)
+    state.safetyLaps = deploy === 'sc' ? 3 + Math.floor(lengthRoll * 3) : 1 + Math.floor(lengthRoll * 2)
     log({ type: deploy })
   }
 

@@ -40,7 +40,7 @@ export interface RaceParams {
 
 export const STATIONARY_TIME = 2.6
 /** Shortest stint the planner will consider (laps). */
-const MIN_STINT = 3
+export const MIN_STINT = 3
 
 export function raceParams(profile: TrackProfile, laps: number): RaceParams {
   const scale = profile.baseLapTime / REFERENCE_LAP
@@ -107,7 +107,8 @@ export interface RankedStrategy {
   label: string
 }
 
-function sequences(length: number): Compound[][] {
+/** Every order of `length` dry compounds that uses at least two different ones. */
+export function compoundSequences(length: number): Compound[][] {
   let out: Compound[][] = [[]]
   for (let i = 0; i < length; i++) out = out.flatMap((seq) => DRY_COMPOUNDS.map((c) => [...seq, c]))
   return out.filter(usesTwoDryCompounds)
@@ -164,7 +165,7 @@ export function rankStrategies(params: RaceParams, { maxStops = 3, keep = 12 } =
   const ranked: RankedStrategy[] = []
   for (let stops = 1; stops <= maxStops; stops++) {
     if ((stops + 1) * MIN_STINT > params.laps) break
-    for (const compounds of sequences(stops + 1)) {
+    for (const compounds of compoundSequences(stops + 1)) {
       const best = bestStops(compounds, params)
       if (Number.isFinite(best.time)) ranked.push(best)
     }
