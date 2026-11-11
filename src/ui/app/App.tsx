@@ -1,4 +1,5 @@
 import { MODULES } from './modules'
+import { TrackStudio } from '../studio/TrackStudio'
 import { ModulePlaceholder } from './ModulePlaceholder'
 import { useHashRoute } from './useHashRoute'
 
@@ -40,7 +41,7 @@ export function App() {
       </header>
 
       <main className="workspace">
-        <ModulePlaceholder module={current} />
+        {active === 'studio' ? <TrackStudio /> : <ModulePlaceholder module={current} />}
       </main>
     </div>
   )

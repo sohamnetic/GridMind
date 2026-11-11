@@ -16,6 +16,19 @@ browser: there is no server, no account and no paid service behind it.
 | 4 | Strategy Optimiser | Monte Carlo evaluation of candidate strategies |
 | 5 | Live Pit Wall | Play strategist during a race, then review the debrief |
 
+## Status
+
+| Phase | Scope | State |
+|---|---|---|
+| 0 | Scaffold, app shell, GitHub Pages pipeline | Done |
+| 1 | Track Studio, track geometry, car physics, test drive | Done |
+| 2 | Sensors, neural network, genetic algorithm, training view | Next |
+| 3 | Multi-car racing, slipstream, traffic training | Planned |
+| 4 | Lap-level race engine: tyres, fuel, pit stops, safety car, weather | Planned |
+| 5 | Monte Carlo strategy optimiser | Planned |
+| 6 | Live Pit Wall and debrief | Planned |
+| 7 | Polish, calibration, sharing | Planned |
+
 ## Develop
 
 Requires Node 22+.
