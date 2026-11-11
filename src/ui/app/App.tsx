@@ -1,14 +1,13 @@
 import { MODULES } from './modules'
 import { DriverEvolution } from '../evolution/DriverEvolution'
 import { StrategyOptimiser } from '../optimiser/StrategyOptimiser'
+import { LivePitWall } from '../pitwall/LivePitWall'
 import { RaceScreen } from '../race/RaceScreen'
 import { TrackStudio } from '../studio/TrackStudio'
-import { ModulePlaceholder } from './ModulePlaceholder'
 import { useHashRoute } from './useHashRoute'
 
 export function App() {
   const [active, navigate] = useHashRoute()
-  const current = MODULES.find((m) => m.id === active) ?? MODULES[0]
 
   return (
     <div className="app">
@@ -53,7 +52,7 @@ export function App() {
         ) : active === 'optimiser' ? (
           <StrategyOptimiser />
         ) : (
-          <ModulePlaceholder module={current} />
+          <LivePitWall />
         )}
       </main>
     </div>
