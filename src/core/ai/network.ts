@@ -72,3 +72,33 @@ export function forward(
   const nOut = sizes[sizes.length - 1]
   for (let j = 0; j < nOut; j++) output[j] = current[j]
 }
+
+/**
+ * Copies a network into a layout with more inputs. The extra inputs are added
+ * after the existing ones with zero weights, so the wider network computes
+ * exactly what the original did until those weights are trained.
+ * Hidden and output layers must be identical in both layouts.
+ */
+export function widenInputs(
+  from: NetworkLayout,
+  to: NetworkLayout,
+  genome: Float32Array,
+  genomeOffset: number,
+  out: Float32Array,
+  outOffset: number,
+): void {
+  const oldIn = from.sizes[0]
+  const newIn = to.sizes[0]
+  const firstOut = from.sizes[1]
+  if (newIn < oldIn || from.sizes.slice(1).join() !== to.sizes.slice(1).join()) {
+    throw new Error('Layouts differ in more than the number of inputs')
+  }
+  let p = genomeOffset
+  let q = outOffset
+  for (let j = 0; j < firstOut; j++) {
+    for (let i = 0; i <= oldIn; i++) out[q++] = genome[p++] // bias + existing weights
+    for (let i = oldIn; i < newIn; i++) out[q++] = 0
+  }
+  const rest = from.weightCount - (oldIn + 1) * firstOut
+  for (let i = 0; i < rest; i++) out[q++] = genome[p++]
+}
