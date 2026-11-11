@@ -1,5 +1,6 @@
 import { MODULES } from './modules'
 import { DriverEvolution } from '../evolution/DriverEvolution'
+import { StrategyOptimiser } from '../optimiser/StrategyOptimiser'
 import { RaceScreen } from '../race/RaceScreen'
 import { TrackStudio } from '../studio/TrackStudio'
 import { ModulePlaceholder } from './ModulePlaceholder'
@@ -49,6 +50,8 @@ export function App() {
           <DriverEvolution />
         ) : active === 'race' ? (
           <RaceScreen />
+        ) : active === 'optimiser' ? (
+          <StrategyOptimiser />
         ) : (
           <ModulePlaceholder module={current} />
         )}

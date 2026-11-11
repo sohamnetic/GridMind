@@ -25,8 +25,8 @@ browser: there is no server, no account and no paid service behind it.
 | 2 | Sensors, neural network, genetic algorithm, training view | Done |
 | 3 | Multi-car racing, slipstream, traffic training, track profile | Done |
 | 4 | Lap-level race engine: tyres, fuel, pit stops, safety car, weather | Done |
-| 5 | Monte Carlo strategy optimiser | Next |
-| 6 | Live Pit Wall and debrief | Planned |
+| 5 | Monte Carlo strategy optimiser: staged search, worker pool, pit-window maps | Done |
+| 6 | Live Pit Wall and debrief | Next |
 | 7 | Polish, calibration, sharing | Planned |
 
 ## Develop
@@ -42,6 +42,7 @@ npm run build      # type-check + production build into dist/
 npm run sim:train  # headless training: -- [preset index | all] [generations] [population] [seed]
 npm run sim:race   # headless racecraft: -- [preset index] [solo generations] [traffic generations] [seed]
 npm run sim:lap    # headless lap-level races: -- [preset index] [laps] [rain chance] [seed] [races]
+npm run sim:optimise # headless strategy study: -- [preset index] [laps] [rain chance] [driver] [final runs] [seed]
 npm run preview    # serve the production build locally
 ```
 
