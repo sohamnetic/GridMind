@@ -86,6 +86,8 @@ export interface BuiltTrack {
   heading: Float64Array
   /** Signed curvature in 1/m; positive = right turn. */
   curvature: Float64Array
+  /** Running total of curvature: entry k is the sum of samples 0..k-1 (length n + 1). */
+  curvaturePrefix: Float64Array
   halfWidth: Float64Array
   /** True when no control point overrides the width. */
   uniformWidth: boolean

@@ -22,8 +22,8 @@ browser: there is no server, no account and no paid service behind it.
 |---|---|---|
 | 0 | Scaffold, app shell, GitHub Pages pipeline | Done |
 | 1 | Track Studio, track geometry, car physics, test drive | Done |
-| 2 | Sensors, neural network, genetic algorithm, training view | Next |
-| 3 | Multi-car racing, slipstream, traffic training | Planned |
+| 2 | Sensors, neural network, genetic algorithm, training view | Done |
+| 3 | Multi-car racing, slipstream, traffic training | Next |
 | 4 | Lap-level race engine: tyres, fuel, pit stops, safety car, weather | Planned |
 | 5 | Monte Carlo strategy optimiser | Planned |
 | 6 | Live Pit Wall and debrief | Planned |
@@ -39,6 +39,7 @@ npm run dev        # dev server with hot reload
 npm test           # unit tests (Vitest)
 npm run lint       # ESLint
 npm run build      # type-check + production build into dist/
+npm run sim:train  # headless training: -- [preset index | all] [generations] [population] [seed]
 npm run preview    # serve the production build locally
 ```
 

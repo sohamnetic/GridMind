@@ -173,7 +173,7 @@ export function stepCar(
 
   // --- Re-locate on the track ---
   const prevS = car.s
-  car.index = locateNear(track, car.x, car.y, car.index)
+  car.index = locateNear(track, car.x, car.y, car.index, 3)
   car.s = arcPosition(track, car.index, car.x, car.y)
   car.lateral = lateralOffset(track, car.index, car.x, car.y)
   car.surface = surfaceAt(track, car.index, car.lateral)

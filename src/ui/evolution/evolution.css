@@ -1,0 +1,167 @@
+.evolution {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: 100%;
+  min-height: 0;
+}
+
+.evolution-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: #0c1210;
+}
+
+.evolution-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.evolution-canvas canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.evolution-side {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+.live-readout {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: rgba(11, 14, 20, 0.84);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.live-readout strong {
+  color: var(--text);
+}
+
+.live-readout b {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ghost-key {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: rgba(11, 14, 20, 0.84);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.ghost-swatch {
+  flex: none;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, hsl(215 95% 58%), hsl(130 95% 60%), hsl(50 95% 64%));
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.panel .segmented button {
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--line-strong);
+}
+
+.panel .segmented button:last-child {
+  border-right: 0;
+}
+
+.panel .segmented button.is-active {
+  background: var(--accent-soft);
+  color: #ffd9cf;
+}
+
+.field select,
+.field input[type='number'] {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-inset);
+  color: var(--text);
+  font: inherit;
+}
+
+.saved-driver {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.saved-driver p {
+  margin: 0;
+}
+
+.mono {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.issue p {
+  margin: 0;
+}
+
+.issue a {
+  color: inherit;
+}
+
+.evolution-side .stats {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 980px) {
+  .evolution {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, 55vh) auto;
+    height: auto;
+  }
+
+  .evolution-side {
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

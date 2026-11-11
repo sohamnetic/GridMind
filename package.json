@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "sim:train": "tsx scripts/train.ts"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",

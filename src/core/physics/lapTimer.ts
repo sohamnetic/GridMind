@@ -25,6 +25,9 @@ export interface LapTimer {
   bestSectors: number[] | null
   /** Position relative to the line at the previous update (0..1). */
   prev: number
+  /** Sector boundaries as lap fractions from the line, cached from the track. */
+  b1: number
+  b2: number
 }
 
 export interface LapEvent {
@@ -37,6 +40,7 @@ export interface LapEvent {
 }
 
 export function createLapTimer(track: BuiltTrack, s: number): LapTimer {
+  const [b1, b2] = sectorBoundaries(track)
   return {
     running: false,
     laps: 0,
@@ -49,6 +53,8 @@ export function createLapTimer(track: BuiltTrack, s: number): LapTimer {
     bestLap: null,
     bestSectors: null,
     prev: relativePosition(track, s),
+    b1,
+    b2,
   }
 }
 
@@ -82,19 +88,26 @@ export function updateLapTimer(
   timer.prev = rel
 
   const delta = rel - prev
+  if (delta > 0.5) return null // wrapped backwards over the line
   const crossedLine = delta < -0.5 // wrapped forwards over the line
-  const movedBack = delta > 0.5 // wrapped backwards over the line
-  if (movedBack) return null
 
-  // Time at which a boundary `at` (lap fraction) was crossed during this step.
-  const crossingTime = (at: number): number => {
-    const overshoot = wrap(rel - at, 1) * track.length
-    return speed > 0.1 ? time - Math.min(overshoot / speed, 1) : time
+  // This runs for every car on every physics step, so the common case (no
+  // line crossed) must return without allocating anything.
+  if (!crossedLine) {
+    if (!timer.running) return null
+    if (timer.sector === 0 && prev < timer.b1 && rel >= timer.b1) {
+      return endSector(timer, crossingTime(track, rel, timer.b1, speed, time))
+    }
+    if (timer.sector === 1 && prev < timer.b2 && rel >= timer.b2) {
+      return endSector(timer, crossingTime(track, rel, timer.b2, speed, time))
+    }
+    return null
   }
 
-  if (!timer.running) {
-    if (!crossedLine) return null
-    const t = crossingTime(0)
+  const t = crossingTime(track, rel, 0, speed, time)
+  if (!timer.running || timer.sector !== 2) {
+    // First crossing, or the line was crossed without completing the sectors:
+    // (re)start timing, no lap.
     timer.running = true
     timer.sector = 0
     timer.lapStart = t
@@ -103,41 +116,27 @@ export function updateLapTimer(
     return { type: 'start' }
   }
 
-  const [b1, b2] = sectorBoundaries(track)
+  timer.current.push(t - timer.sectorStart)
+  const lapTime = t - timer.lapStart
+  const best = timer.bestLap === null || lapTime < timer.bestLap
+  timer.lastLap = lapTime
+  timer.lastSectors = timer.current
+  if (best) {
+    timer.bestLap = lapTime
+    timer.bestSectors = timer.current
+  }
+  timer.laps++
+  timer.sector = 0
+  timer.lapStart = t
+  timer.sectorStart = t
+  timer.current = []
+  return { type: 'lap', time: lapTime, best }
+}
 
-  if (timer.sector === 0 && !crossedLine && prev < b1 && rel >= b1) {
-    return endSector(timer, crossingTime(b1))
-  }
-  if (timer.sector === 1 && !crossedLine && prev < b2 && rel >= b2) {
-    return endSector(timer, crossingTime(b2))
-  }
-  if (crossedLine) {
-    const t = crossingTime(0)
-    if (timer.sector !== 2) {
-      // Line crossed without completing the sectors: restart timing, no lap.
-      timer.sector = 0
-      timer.lapStart = t
-      timer.sectorStart = t
-      timer.current = []
-      return { type: 'start' }
-    }
-    timer.current.push(t - timer.sectorStart)
-    const lapTime = t - timer.lapStart
-    const best = timer.bestLap === null || lapTime < timer.bestLap
-    timer.lastLap = lapTime
-    timer.lastSectors = timer.current
-    if (best) {
-      timer.bestLap = lapTime
-      timer.bestSectors = timer.current
-    }
-    timer.laps++
-    timer.sector = 0
-    timer.lapStart = t
-    timer.sectorStart = t
-    timer.current = []
-    return { type: 'lap', time: lapTime, best }
-  }
-  return null
+/** Time at which the boundary `at` (lap fraction) was crossed during the step that ended at `time`. */
+function crossingTime(track: BuiltTrack, rel: number, at: number, speed: number, time: number): number {
+  const overshoot = wrap(rel - at, 1) * track.length
+  return speed > 0.1 ? time - Math.min(overshoot / speed, 1) : time
 }
 
 function endSector(timer: LapTimer, t: number): LapEvent {

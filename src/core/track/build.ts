@@ -76,6 +76,9 @@ export function buildTrack(def: TrackDef): BuiltTrack | null {
     curvature[k] = sum / (2 * R + 1)
   }
 
+  const curvaturePrefix = new Float64Array(n + 1)
+  for (let k = 0; k < n; k++) curvaturePrefix[k + 1] = curvaturePrefix[k] + curvature[k]
+
   const ctrlSample = new Int32Array(def.points.length)
   for (let i = 0; i < def.points.length; i++) {
     ctrlSample[i] = Math.round(cum[dense.segmentStart[i]] / step) % n
@@ -104,6 +107,7 @@ export function buildTrack(def: TrackDef): BuiltTrack | null {
     ty,
     heading,
     curvature,
+    curvaturePrefix,
     halfWidth,
     uniformWidth: def.points.every((p) => p.width === undefined),
     ctrlSegment,
@@ -144,6 +148,25 @@ export function locateNear(
     }
   }
   return best
+}
+
+/**
+ * Follows a moving point along the centreline by projecting it onto the local
+ * tangent, instead of comparing distances. A couple of iterations are enough
+ * when the point moves a few metres at a time, which makes this several times
+ * cheaper than locateNear for ray marching.
+ */
+export function projectIndex(track: BuiltTrack, px: number, py: number, hint: number, iterations = 2): number {
+  const { x, y, tx, ty, n } = track
+  const perMetre = 1 / track.step
+  let i = hint
+  for (let it = 0; it < iterations; it++) {
+    const along = (px - x[i]) * tx[i] + (py - y[i]) * ty[i]
+    const shift = Math.round(along * perMetre)
+    if (shift === 0) break
+    i = wrapIndex(i + shift, n)
+  }
+  return i
 }
 
 /** Nearest centreline sample over the whole track (used when there is no hint). */
@@ -205,6 +228,18 @@ export function poseAt(track: BuiltTrack, s: number, lateral = 0): TrackPose {
     y: cy - Math.cos(heading) * lateral,
     heading,
   }
+}
+
+/**
+ * Mean signed curvature over samples [from, to) counted forward from sample 0;
+ * both may run past the end of the lap. Constant time via the prefix sums.
+ */
+export function meanCurvature(track: BuiltTrack, from: number, to: number): number {
+  const { n, curvaturePrefix: prefix } = track
+  const total = prefix[n]
+  const a = Math.floor(from / n) * total + prefix[from % n]
+  const b = Math.floor(to / n) * total + prefix[to % n]
+  return (b - a) / (to - from)
 }
 
 /** Forward arc distance from fraction `a` to fraction `b` (m), wrapping at the line. */

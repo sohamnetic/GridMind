@@ -8,6 +8,13 @@ export function lerp(a: number, b: number, t: number): number {
 
 /** Wraps an integer index into [0, n). */
 export function wrapIndex(i: number, n: number): number {
+  // Almost every call is within one lap of the range; avoid the two divisions then.
+  if (i >= 0) {
+    if (i < n) return i
+    if (i < 2 * n) return i - n
+  } else if (i >= -n) {
+    return i + n
+  }
   return ((i % n) + n) % n
 }
 

@@ -1,0 +1,44 @@
+.chart {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.chart .uplot {
+  font-family: var(--font-ui);
+}
+
+.chart .u-legend {
+  padding: 2px 6px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: left;
+}
+
+.chart .u-legend .u-series {
+  padding: 0 6px 0 0;
+}
+
+.chart .u-legend .u-series > * {
+  padding: 1px 2px;
+}
+
+.chart .u-legend .u-value {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart .u-legend .u-marker {
+  width: 10px;
+  height: 2px;
+  border-radius: 0;
+}
+
+.chart .u-cursor-x,
+.chart .u-cursor-y {
+  border-color: var(--line-strong);
+}
