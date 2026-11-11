@@ -93,5 +93,5 @@ export function readTrafficSensors(
   out[k++] = aheadGap < AHEAD_RANGE ? clamp(closing / 30, -1, 1) : 0
   const closeness = 1 - behindGap / BEHIND_RANGE
   out[k++] = closeness
-  out[k++] = clamp(behindSide / 4, -1, 1) * closeness
+  out[k] = clamp(behindSide / 4, -1, 1) * closeness
 }

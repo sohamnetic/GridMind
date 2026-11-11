@@ -68,6 +68,8 @@ interface EvolutionState {
   resume: () => void
   reset: () => void
   discardSaved: (trackId: string) => Promise<void>
+  /** Writes the current run to storage now and resolves when it is there. */
+  saveNow: () => Promise<void>
   setFramesEnabled: (enabled: boolean) => void
 }
 
@@ -114,6 +116,8 @@ export const useEvolutionStore = create<EvolutionState>((set, get) => {
       history: state.history,
       ghost: state.ghost,
       savedAt: Date.now(),
+      // Keep the race-trained networks stored alongside, if there are any.
+      traffic: (await loadDriver(def.id, DRIVER_LAYOUT.sizes))?.traffic,
     }
     if (await storeDriver(driver)) {
       set({
@@ -283,5 +287,6 @@ export const useEvolutionStore = create<EvolutionState>((set, get) => {
     },
 
     setFramesEnabled: (enabled) => send({ type: 'frames', enabled }),
+    saveNow: save,
   }
 })

@@ -1,6 +1,8 @@
 import { del, get, set } from 'idb-keyval'
 import type { GenerationStats } from '../core/evolution/trainer'
 import type { TrackDef } from '../core/track/types'
+import type { TrafficStats } from '../core/evolution/trafficTrainer'
+import type { TrafficSnapshot } from '../workers/raceProtocol'
 import type { TrainingSnapshot } from '../workers/trainingProtocol'
 
 /**
@@ -21,6 +23,18 @@ export interface SavedDriver {
   /** Racing line of the record lap (x, y, speed triplets). */
   ghost: Float32Array | null
   savedAt: number
+  /** Second-stage training: the same drivers after learning to race each other. */
+  traffic?: {
+    snapshot: TrafficSnapshot
+    history: TrafficStats[]
+  }
+}
+
+/** Solo-trained networks in the order racing wants them: record holder first. */
+export function soloDrivers(driver: SavedDriver): Float32Array {
+  const population = driver.snapshot.population.slice()
+  if (driver.snapshot.recordGenome) population.set(driver.snapshot.recordGenome, 0)
+  return population
 }
 
 const key = (trackId: string) => `gridmind:driver:${trackId}`

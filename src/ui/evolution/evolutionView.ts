@@ -1,6 +1,6 @@
 import { CarStatus } from '../../core/evolution/episode'
 import type { BuiltTrack } from '../../core/track/types'
-import { applyCamera, fitCamera, zoomAt, type Camera } from '../../render/camera'
+import { applyCamera, fitCamera, worldToScreen, zoomAt, type Camera } from '../../render/camera'
 import { drawTrack, TRACK_COLORS, type TrackPaths } from '../../render/trackRenderer'
 import { liveFrame } from '../../state/evolutionStore'
 import { FRAME_STRIDE } from '../../workers/trainingProtocol'
@@ -8,6 +8,19 @@ import { FRAME_STRIDE } from '../../workers/trainingProtocol'
 const LEADER_COLOR = '#ff5a36'
 const CAR_COLOR = 'rgba(233, 237, 245, 0.75)'
 const OUT_COLOR = 'rgba(216, 65, 58, 0.55)'
+
+/** Car positions to draw: the object is mutated in place by whoever receives worker frames. */
+export interface FrameSource {
+  seq: number
+  leader: number
+  cars: Float32Array | null
+}
+
+/** Per-car colours and labels, for races where each car is somebody. */
+export interface CarStyle {
+  colors: readonly string[]
+  labels: readonly string[]
+}
 
 /**
  * Draws the training view: the track and ghost line on a cached layer, and
@@ -29,7 +42,11 @@ export class EvolutionView {
   private lastSeq = -1
   private drag: { sx: number; sy: number; camX: number; camY: number } | null = null
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly source: FrameSource = liveFrame,
+    private readonly style: CarStyle | null = null,
+  ) {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas 2D is not available')
     this.ctx = ctx
@@ -128,14 +145,15 @@ export class EvolutionView {
 
   private readonly frame = (): void => {
     this.raf = requestAnimationFrame(this.frame)
-    if (!this.layerDirty && liveFrame.seq === this.lastSeq) return
-    this.lastSeq = liveFrame.seq
+    const source = this.source
+    if (!this.layerDirty && source.seq === this.lastSeq) return
+    this.lastSeq = source.seq
     if (this.layerDirty) this.drawLayer()
 
     const { ctx, dpr, cam } = this
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.drawImage(this.layer, 0, 0)
-    const cars = liveFrame.cars
+    const cars = source.cars
     if (!cars || !this.track) return
 
     applyCamera(ctx, cam, this.w, this.h, dpr)
@@ -154,23 +172,56 @@ export class EvolutionView {
       ctx.fill()
     }
 
-    ctx.fillStyle = CAR_COLOR
-    for (let i = 0; i < count; i++) {
-      const o = i * FRAME_STRIDE
-      if (cars[o + 3] !== CarStatus.Running || i === liveFrame.leader) continue
-      this.arrow(cars[o], cars[o + 1], cars[o + 2], size)
+    const style = this.style
+    if (style) {
+      // A race: every car in its team colour, outlined so it reads on any surface.
+      ctx.strokeStyle = '#0b0e14'
+      ctx.lineWidth = size * 0.1
+      for (let i = 0; i < count; i++) {
+        const o = i * FRAME_STRIDE
+        if (cars[o + 3] !== CarStatus.Running) continue
+        ctx.fillStyle = style.colors[i] ?? CAR_COLOR
+        this.arrow(cars[o], cars[o + 1], cars[o + 2], size * 1.25)
+        ctx.stroke()
+      }
+    } else {
+      ctx.fillStyle = CAR_COLOR
+      for (let i = 0; i < count; i++) {
+        const o = i * FRAME_STRIDE
+        if (cars[o + 3] !== CarStatus.Running || i === source.leader) continue
+        this.arrow(cars[o], cars[o + 1], cars[o + 2], size)
+      }
     }
 
-    // The leader last, on top, in the accent colour.
-    const lo = liveFrame.leader * FRAME_STRIDE
+    // The leader gets a ring (and, in training, the accent colour).
+    const lo = source.leader * FRAME_STRIDE
     if (lo < cars.length && cars[lo + 3] === CarStatus.Running) {
-      ctx.fillStyle = LEADER_COLOR
-      this.arrow(cars[lo], cars[lo + 1], cars[lo + 2], size * 1.35)
-      ctx.strokeStyle = LEADER_COLOR
+      if (!style) {
+        ctx.fillStyle = LEADER_COLOR
+        this.arrow(cars[lo], cars[lo + 1], cars[lo + 2], size * 1.35)
+      }
+      ctx.strokeStyle = style ? '#ffffff' : LEADER_COLOR
       ctx.lineWidth = size * 0.12
       ctx.beginPath()
-      ctx.arc(cars[lo], cars[lo + 1], size * 1.5, 0, Math.PI * 2)
+      ctx.arc(cars[lo], cars[lo + 1], size * 1.6, 0, Math.PI * 2)
       ctx.stroke()
+    }
+
+    if (style) {
+      // Driver codes beside the cars, in screen space so they stay readable.
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.font = '600 10px ui-monospace, Consolas, monospace'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      for (let i = 0; i < count; i++) {
+        const o = i * FRAME_STRIDE
+        if (cars[o + 3] !== CarStatus.Running) continue
+        const p = worldToScreen(cam, this.w, this.h, cars[o], cars[o + 1])
+        ctx.fillStyle = 'rgba(11, 14, 20, 0.7)'
+        ctx.fillRect(p.x + 7, p.y - 13, 24, 11)
+        ctx.fillStyle = style.colors[i] ?? '#e9edf5'
+        ctx.fillText(style.labels[i] ?? '', p.x + 9, p.y - 7)
+      }
     }
   }
 

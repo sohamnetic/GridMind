@@ -1,5 +1,6 @@
-import { smoothstep, wrap, wrapIndex } from '../core/math/util'
+import { wrap, wrapIndex } from '../core/math/util'
 import { fractionToIndex } from '../core/track/build'
+import { buildPitLane, PIT_LANE_WIDTH } from '../core/track/pit'
 import type { BuiltTrack } from '../core/track/types'
 
 export const TRACK_COLORS = {
@@ -21,8 +22,6 @@ export const TRACK_COLORS = {
 
 /** Corners sharper than this radius get painted kerbs. */
 const KERB_RADIUS = 160
-const PIT_LANE_WIDTH = 8
-const PIT_LANE_GAP = 3
 
 /**
  * Pre-built drawing paths for one track. Building these once per track edit
@@ -88,41 +87,15 @@ export function buildTrackPaths(track: BuiltTrack): TrackPaths {
   return { track, centre, left, right, kerbRed, kerbWhite, pit: pit?.path ?? null, pitLength: pit?.length ?? 0 }
 }
 
-/** Centre offset of the pit lane from the track centreline at sample `i` (m). */
-function pitOffset(track: BuiltTrack, i: number): number {
-  return track.halfWidth[i] + track.def.kerbWidth + PIT_LANE_GAP + PIT_LANE_WIDTH / 2
-}
-
 function buildPitPath(track: BuiltTrack): { path: Path2D; length: number } | null {
-  const pit = track.def.pit
-  if (!pit) return null
-  const { n, x, y, tx, ty, step } = track
-  const from = fractionToIndex(pit.entry, n)
-  const count = Math.round(wrap(pit.exit - pit.entry, 1) * n)
-  if (count < 20) return null
-
-  const side = pit.side === 'left' ? 1 : -1
-  const blend = Math.min(Math.round(60 / step), Math.floor(count / 3))
+  const lane = buildPitLane(track)
+  if (!lane) return null
   const path = new Path2D()
-  let length = 0
-  let px = 0
-  let py = 0
-  for (let k = 0; k <= count; k++) {
-    const i = (from + k) % n
-    // Peel away from the racing surface on entry and merge back on exit.
-    const ramp = smoothstep(Math.min(k, count - k) / blend)
-    const offset = side * (track.halfWidth[i] * 0.5 + (pitOffset(track, i) - track.halfWidth[i] * 0.5) * ramp)
-    const qx = x[i] + ty[i] * offset
-    const qy = y[i] - tx[i] * offset
-    if (k === 0) path.moveTo(qx, qy)
-    else {
-      path.lineTo(qx, qy)
-      length += Math.hypot(qx - px, qy - py)
-    }
-    px = qx
-    py = qy
+  for (let k = 0; k < lane.x.length; k++) {
+    if (k === 0) path.moveTo(lane.x[k], lane.y[k])
+    else path.lineTo(lane.x[k], lane.y[k])
   }
-  return { path, length }
+  return { path, length: lane.length }
 }
 
 export interface DrawTrackOptions {

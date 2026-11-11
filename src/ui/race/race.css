@@ -1,0 +1,115 @@
+.race-setup {
+  grid-template-columns: 1fr 1fr;
+  margin-top: 12px;
+}
+
+.race-setup .field:last-child {
+  grid-column: 1 / -1;
+}
+
+.race-result {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.timing-scroll {
+  max-height: 420px;
+}
+
+.timing {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timing th,
+.timing td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.timing thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-raised);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.timing tbody th {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.timing .num {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.timing tbody tr:last-child th,
+.timing tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.timing tr.is-out {
+  color: var(--text-faint);
+}
+
+.team-bar {
+  flex: none;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.drs-tag {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(61, 220, 151, 0.18);
+  color: var(--good);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.timing .is-fastest {
+  color: #c58bff;
+}
+
+.timing .is-gain {
+  color: var(--good);
+}
+
+.timing .is-loss {
+  color: var(--accent);
+}
+
+.race-log {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.race-log li {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 8px;
+}
+
+.race-log .num {
+  color: var(--text-faint);
+}
+
+.profile-stats {
+  margin-top: 10px;
+}

@@ -1,5 +1,6 @@
 import { MODULES } from './modules'
 import { DriverEvolution } from '../evolution/DriverEvolution'
+import { RaceScreen } from '../race/RaceScreen'
 import { TrackStudio } from '../studio/TrackStudio'
 import { ModulePlaceholder } from './ModulePlaceholder'
 import { useHashRoute } from './useHashRoute'
@@ -46,6 +47,8 @@ export function App() {
           <TrackStudio />
         ) : active === 'evolution' ? (
           <DriverEvolution />
+        ) : active === 'race' ? (
+          <RaceScreen />
         ) : (
           <ModulePlaceholder module={current} />
         )}

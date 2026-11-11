@@ -165,3 +165,56 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* ---------- Stage switch (lap training / racecraft) ---------- */
+
+.stage-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage-switch button {
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.stage-switch button:hover {
+  color: var(--text);
+}
+
+.stage-switch button.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.saved-driver-note {
+  margin: 12px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.panel .muted + .issue,
+.panel .muted + .saved-driver-note {
+  margin-top: 12px;
+}
+
+.button-link {
+  display: grid;
+  place-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  border-color: var(--text-faint);
+}

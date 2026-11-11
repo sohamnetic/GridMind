@@ -167,12 +167,11 @@ export function buildProfile(
   { baseLapTime = 0, pitLaneLength = 0 } = {},
 ): TrackProfile {
   const { n, step } = track
-  const { speed, lateral } = trace
+  const { speed } = trace
   const lapTime = baseLapTime > 0 ? baseLapTime : traceTime(track, trace, 0, n)
 
   let top = 0
   let throttleTime = 0
-  let loadTime = 0
   let total = 0
   for (let i = 0; i < n; i++) {
     const v = speed[i]
@@ -182,8 +181,6 @@ export function buildProfile(
     // Accelerating or holding speed: the driver is on the throttle.
     const next = speed[(i + 1) % n]
     if ((next * next - v * v) / (2 * step) > -1) throttleTime += dt
-    const g = lateral[i] / GRAVITY
-    loadTime += g * g * dt
   }
 
   // Pit lane: time at the speed limit, against racing through the same stretch.
@@ -200,10 +197,21 @@ export function buildProfile(
   }
   const pitLossTime = Math.max(5, lane / PIT_SPEED - racingTime)
 
-  // Passing zones: a straight that ends in a big stop. These come from the
-  // physics-limit trace rather than the recorded lap, so the answer describes
-  // the circuit and not how hard one particular driver happens to brake.
-  const limit = source === 'estimate' ? speed : estimateTrace(track).speed
+  // Tyre stress and passing zones come from the physics-limit trace rather
+  // than the recorded lap, so they describe the circuit and not how hard one
+  // particular driver happens to corner or brake.
+  const limitTrace = source === 'estimate' ? trace : estimateTrace(track)
+  const limit = limitTrace.speed
+
+  // Tyre stress: time-averaged squared cornering load, also at the physics limit.
+  let loadTime = 0
+  let limitTotal = 0
+  for (let i = 0; i < n; i++) {
+    const dt = step / limit[i]
+    const g = limitTrace.lateral[i] / GRAVITY
+    loadTime += g * g * dt
+    limitTotal += dt
+  }
   const startS = track.def.startFraction * track.length
   let zones = 0
   let zoneWeight = 0
@@ -233,7 +241,7 @@ export function buildProfile(
     topSpeed: top,
     averageSpeed: track.length / lapTime,
     fullThrottle: throttleTime / total,
-    tyreStress: Math.min(1.6, Math.max(0.6, Math.sqrt(loadTime / total / TYPICAL_LOAD))),
+    tyreStress: Math.min(1.6, Math.max(0.6, Math.sqrt(loadTime / limitTotal / TYPICAL_LOAD))),
     pitLaneLength: lane,
     pitLossTime,
     overtakingDifficulty: Math.min(0.95, Math.max(0.15, difficulty)),

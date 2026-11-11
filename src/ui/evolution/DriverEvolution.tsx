@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatLapTime } from '../../core/physics/lapTimer'
 import { isDrivable, validateTrack } from '../../core/track/analysis'
 import { buildTrack } from '../../core/track/build'
 import { buildTrackPaths } from '../../render/trackRenderer'
 import { trackKey } from '../../state/driverLibrary'
-import {
-  liveFrame,
-  POPULATION_OPTIONS,
-  useEvolutionStore,
-  type SpeedMode,
-} from '../../state/evolutionStore'
+import { liveFrame, POPULATION_OPTIONS, useEvolutionStore, type SpeedMode } from '../../state/evolutionStore'
+import { useRaceStore } from '../../state/raceStore'
 import { useStudioStore } from '../../state/studioStore'
 import { LineChart, type ChartSeries } from '../components/LineChart'
-import { EvolutionView } from './evolutionView'
+import { PopulationCanvas } from '../components/PopulationCanvas'
+import { RacecraftPanel } from './RacecraftPanel'
 import './evolution.css'
 
 const SPEED_LABELS: { id: SpeedMode; label: string; title: string }[] = [
@@ -39,10 +36,15 @@ export function DriverEvolution() {
   const saved = useEvolutionStore((s) => s.saved)
   const error = useEvolutionStore((s) => s.error)
   const actions = useEvolutionStore.getState()
+  const raceMode = useRaceStore((s) => s.mode)
+  const raceStatus = useRaceStore((s) => s.status)
+  const raceDef = useRaceStore((s) => s.def)
+  const [stage, setStage] = useState<'lap' | 'race'>('lap')
+  const racecraftRunning = raceMode === 'train' && (raceStatus === 'running' || raceStatus === 'starting')
 
   // While a run exists the screen shows the circuit it is training on, even
   // if the circuit has since been edited in the Track Studio.
-  const def = sessionDef ?? studioDef
+  const def = stage === 'race' ? ((raceMode === 'train' ? raceDef : null) ?? studioDef) : (sessionDef ?? studioDef)
   const scene = useMemo(() => {
     const track = buildTrack(def)
     return {
@@ -67,8 +69,12 @@ export function DriverEvolution() {
   // Car frames are only worth sending while this screen is open.
   useEffect(() => {
     useEvolutionStore.getState().setFramesEnabled(true)
-    return () => useEvolutionStore.getState().setFramesEnabled(false)
-  }, [status])
+    useRaceStore.getState().setFramesEnabled(true)
+    return () => {
+      useEvolutionStore.getState().setFramesEnabled(false)
+      if (useRaceStore.getState().mode === 'train') useRaceStore.getState().setFramesEnabled(false)
+    }
+  }, [status, raceStatus])
 
   const latest = history[history.length - 1]
   const charts = useMemo(() => {
@@ -90,9 +96,18 @@ export function DriverEvolution() {
   return (
     <div className="evolution">
       <div className="evolution-stage">
-        <TrainingCanvas track={scene.track} paths={scene.paths} ghost={ghost} />
-        <LiveReadout active={hasRun} population={populationSize} recordLap={recordLap} trackName={def.name} />
-        {ghost && (
+        <PopulationCanvas
+          track={scene.track}
+          paths={scene.paths}
+          ghost={stage === 'lap' ? ghost : null}
+          label="Training view: the cars on the circuit"
+        />
+        {stage === 'lap' ? (
+          <LiveReadout active={hasRun} population={populationSize} recordLap={recordLap} trackName={def.name} />
+        ) : (
+          <LiveReadout active={raceMode === 'train'} population={8} recordLap={null} trackName={def.name} heat />
+        )}
+        {stage === 'lap' && ghost && (
           <p className="ghost-key">
             <span className="ghost-swatch" aria-hidden="true" /> Ghost line: the best driver's lap, blue where it is
             slow, yellow where it is fast
@@ -101,175 +116,216 @@ export function DriverEvolution() {
       </div>
 
       <aside className="studio-side evolution-side" aria-label="Training controls and progress">
-        <section className="panel">
-          <h2>Training</h2>
+        <div className="stage-switch" role="tablist" aria-label="Training stage">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stage === 'lap'}
+            className={stage === 'lap' ? 'is-active' : undefined}
+            onClick={() => setStage('lap')}
+          >
+            1 · Learn the lap
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stage === 'race'}
+            className={stage === 'race' ? 'is-active' : undefined}
+            onClick={() => setStage('race')}
+          >
+            2 · Learn to race
+          </button>
+        </div>
+        {stage === 'race' ? (
+          <RacecraftPanel studioDef={studioDef} drivable={studioDrivable} />
+        ) : (
+          <>
+            <section className="panel">
+              <h2>Training</h2>
 
-          {!studioDrivable && !hasRun && (
-            <p className="issue issue-error">
-              This circuit has problems that stop cars driving it. <a href="#/studio">Fix it in the Track Studio</a>.
-            </p>
-          )}
-          {error && (
-            <p className="issue issue-error" role="alert">
-              {error}
-            </p>
-          )}
-          {circuitChanged && (
-            <div className="issue issue-warning">
-              <p>The circuit in the Track Studio is different from the one these drivers are training on.</p>
-              <div className="button-row">
-                <button
-                  type="button"
-                  disabled={!studioDrivable}
-                  onClick={() => void actions.start(studioDef, 'adopt')}
-                  title="Keep the drivers and let them adapt to the new layout"
-                >
-                  Move drivers over
-                </button>
-                <button type="button" disabled={!studioDrivable} onClick={() => void actions.start(studioDef, 'fresh')}>
-                  Start fresh
-                </button>
-              </div>
-            </div>
-          )}
+              {racecraftRunning && (
+                <p className="issue issue-warning">
+                  Racecraft training is running on these drivers. Pause it in “Learn to race” before training laps
+                  again.
+                </p>
+              )}
 
-          {status === 'idle' ? (
-            <>
-              <fieldset className="fields">
-                <label className="field">
-                  <span>Cars per generation</span>
-                  <select
-                    value={populationSize}
-                    onChange={(e) => actions.setPopulationSize(Number(e.target.value))}
-                  >
-                    {POPULATION_OPTIONS.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Random seed</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={999999}
-                    value={seed}
-                    onChange={(e) => actions.setSeed(Math.max(1, Math.floor(Number(e.target.value)) || 1))}
-                  />
-                </label>
-              </fieldset>
-              <button
-                type="button"
-                className="primary"
-                disabled={!studioDrivable}
-                onClick={() => void actions.start(studioDef, 'fresh')}
-              >
-                Start training
-              </button>
-              {saved && (
-                <div className="saved-driver">
-                  <p>
-                    Saved drivers for this circuit: generation {saved.generation}, best lap{' '}
-                    <span className="mono">{formatLapTime(saved.recordLap)}</span>
-                    {saved.trackKey !== studioKey && ' (trained before the circuit was last edited)'}
-                  </p>
+              {!studioDrivable && !hasRun && (
+                <p className="issue issue-error">
+                  This circuit has problems that stop cars driving it. <a href="#/studio">Fix it in the Track Studio</a>
+                  .
+                </p>
+              )}
+              {error && (
+                <p className="issue issue-error" role="alert">
+                  {error}
+                </p>
+              )}
+              {circuitChanged && (
+                <div className="issue issue-warning">
+                  <p>The circuit in the Track Studio is different from the one these drivers are training on.</p>
                   <div className="button-row">
                     <button
                       type="button"
                       disabled={!studioDrivable}
-                      onClick={() => void actions.start(studioDef, 'saved')}
+                      onClick={() => void actions.start(studioDef, 'adopt')}
+                      title="Keep the drivers and let them adapt to the new layout"
                     >
-                      Continue
+                      Move drivers over
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm('Delete the saved drivers for this circuit? This cannot be undone.')) {
-                          void actions.discardSaved(studioDef.id)
-                        }
-                      }}
+                      disabled={!studioDrivable}
+                      onClick={() => void actions.start(studioDef, 'fresh')}
                     >
-                      Delete
+                      Start fresh
                     </button>
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            <>
-              <div className="segmented" role="group" aria-label="Simulation speed">
-                {SPEED_LABELS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    title={s.title}
-                    className={speed === s.id ? 'is-active' : undefined}
-                    aria-pressed={speed === s.id}
-                    onClick={() => actions.setSpeed(s.id)}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <div className="button-row">
-                {status === 'paused' ? (
-                  <button type="button" onClick={actions.resume}>
-                    Resume
-                  </button>
-                ) : (
-                  <button type="button" onClick={actions.pause} disabled={status === 'starting'}>
-                    Pause
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Stop this training run? Saved drivers are kept.')) actions.reset()
-                  }}
-                >
-                  Stop
-                </button>
-              </div>
-            </>
-          )}
-        </section>
 
-        <section className="panel">
-          <h2>Progress</h2>
-          {history.length === 0 ? (
-            <p className="muted">
-              Drivers start with random networks and crash almost at once. Each generation keeps the ones that got
-              furthest and breeds from them.
-            </p>
-          ) : (
-            <>
-              <dl className="stats">
-                <Stat label="Generation" value={String(latest.generation)} />
-                <Stat label="Record lap" value={formatLapTime(recordLap)} />
-                <Stat label="Completed a lap" value={`${latest.finishers} of ${populationSize}`} />
-                <Stat label="Crashed" value={`${latest.crashed} of ${populationSize}`} />
-                <Stat label="Furthest car" value={`${Math.min(100, Math.round(latest.bestProgress * 100))} % of a lap`} />
-                <Stat label="Mutation size" value={latest.sigma.toFixed(2)} />
-              </dl>
-
-              {recordLap === null ? (
+              {status === 'idle' ? (
                 <>
-                  <h3>Furthest progress round the lap</h3>
-                  <LineChart x={charts.x} series={charts.progress} formatY={formatPercent} />
+                  <fieldset className="fields">
+                    <label className="field">
+                      <span>Cars per generation</span>
+                      <select
+                        value={populationSize}
+                        onChange={(e) => actions.setPopulationSize(Number(e.target.value))}
+                      >
+                        {POPULATION_OPTIONS.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Random seed</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={999999}
+                        value={seed}
+                        onChange={(e) => actions.setSeed(Math.max(1, Math.floor(Number(e.target.value)) || 1))}
+                      />
+                    </label>
+                  </fieldset>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!studioDrivable || racecraftRunning}
+                    onClick={() => void actions.start(studioDef, 'fresh')}
+                  >
+                    Start training
+                  </button>
+                  {saved && (
+                    <div className="saved-driver">
+                      <p>
+                        Saved drivers for this circuit: generation {saved.generation}, best lap{' '}
+                        <span className="mono">{formatLapTime(saved.recordLap)}</span>
+                        {saved.trackKey !== studioKey && ' (trained before the circuit was last edited)'}
+                      </p>
+                      <div className="button-row">
+                        <button
+                          type="button"
+                          disabled={!studioDrivable}
+                          onClick={() => void actions.start(studioDef, 'saved')}
+                        >
+                          Continue
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Delete the saved drivers for this circuit? This cannot be undone.')) {
+                              void actions.discardSaved(studioDef.id)
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
-                  <h3>Lap time</h3>
-                  <LineChart x={charts.x} series={charts.lap} formatY={formatSeconds} />
+                  <div className="segmented" role="group" aria-label="Simulation speed">
+                    {SPEED_LABELS.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        title={s.title}
+                        className={speed === s.id ? 'is-active' : undefined}
+                        aria-pressed={speed === s.id}
+                        onClick={() => actions.setSpeed(s.id)}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="button-row">
+                    {status === 'paused' ? (
+                      <button type="button" onClick={actions.resume} disabled={racecraftRunning}>
+                        Resume
+                      </button>
+                    ) : (
+                      <button type="button" onClick={actions.pause} disabled={status === 'starting'}>
+                        Pause
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Stop this training run? Saved drivers are kept.')) actions.reset()
+                      }}
+                    >
+                      Stop
+                    </button>
+                  </div>
                 </>
               )}
-              <h3>Fitness</h3>
-              <LineChart x={charts.x} series={charts.fitness} formatY={formatFitness} />
-            </>
-          )}
-        </section>
+            </section>
+
+            <section className="panel">
+              <h2>Progress</h2>
+              {history.length === 0 ? (
+                <p className="muted">
+                  Drivers start with random networks and crash almost at once. Each generation keeps the ones that got
+                  furthest and breeds from them.
+                </p>
+              ) : (
+                <>
+                  <dl className="stats">
+                    <Stat label="Generation" value={String(latest.generation)} />
+                    <Stat label="Record lap" value={formatLapTime(recordLap)} />
+                    <Stat label="Completed a lap" value={`${latest.finishers} of ${populationSize}`} />
+                    <Stat label="Crashed" value={`${latest.crashed} of ${populationSize}`} />
+                    <Stat
+                      label="Furthest car"
+                      value={`${Math.min(100, Math.round(latest.bestProgress * 100))} % of a lap`}
+                    />
+                    <Stat label="Mutation size" value={latest.sigma.toFixed(2)} />
+                  </dl>
+
+                  {recordLap === null ? (
+                    <>
+                      <h3>Furthest progress round the lap</h3>
+                      <LineChart x={charts.x} series={charts.progress} formatY={formatPercent} />
+                    </>
+                  ) : (
+                    <>
+                      <h3>Lap time</h3>
+                      <LineChart x={charts.x} series={charts.lap} formatY={formatSeconds} />
+                    </>
+                  )}
+                  <h3>Fitness</h3>
+                  <LineChart x={charts.x} series={charts.fitness} formatY={formatFitness} />
+                </>
+              )}
+            </section>
+          </>
+        )}
       </aside>
     </div>
   )
@@ -284,58 +340,17 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-interface CanvasProps {
-  track: ReturnType<typeof buildTrack>
-  paths: ReturnType<typeof buildTrackPaths> | null
-  ghost: Float32Array | null
-}
-
-function TrainingCanvas({ track, paths, ghost }: CanvasProps) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const viewRef = useRef<EvolutionView | null>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const wrap = wrapRef.current
-    if (!canvas || !wrap) return
-    const view = new EvolutionView(canvas)
-    viewRef.current = view
-    const resize = () => view.resize(wrap.clientWidth, wrap.clientHeight, window.devicePixelRatio || 1)
-    const observer = new ResizeObserver(resize)
-    observer.observe(wrap)
-    resize()
-    return () => {
-      observer.disconnect()
-      view.destroy()
-      viewRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    viewRef.current?.setTrack(track, paths)
-  }, [track, paths])
-
-  useEffect(() => {
-    viewRef.current?.setGhost(ghost)
-  }, [ghost])
-
-  return (
-    <div className="evolution-canvas" ref={wrapRef}>
-      <canvas ref={canvasRef} aria-label="Training view: the population of cars on the circuit" />
-    </div>
-  )
-}
-
 interface ReadoutProps {
   active: boolean
   population: number
   recordLap: number | null
   trackName: string
+  /** Racecraft training shows one heat of the generation rather than the whole population. */
+  heat?: boolean
 }
 
 /** Generation clock and car count, sampled a few times a second from the live frame. */
-function LiveReadout({ active, population, recordLap, trackName }: ReadoutProps) {
+function LiveReadout({ active, population, recordLap, trackName, heat = false }: ReadoutProps) {
   const [live, setLive] = useState({ generation: 0, time: 0, running: 0 })
 
   useEffect(() => {
@@ -360,9 +375,13 @@ function LiveReadout({ active, population, recordLap, trackName }: ReadoutProps)
           <span>
             <b>{live.running}</b> of {population} running
           </span>
-          <span>
-            Record <b>{formatLapTime(recordLap)}</b>
-          </span>
+          {heat ? (
+            <span>Showing one heat of this generation</span>
+          ) : (
+            <span>
+              Record <b>{formatLapTime(recordLap)}</b>
+            </span>
+          )}
         </>
       ) : (
         <span>Not training</span>
