@@ -164,7 +164,8 @@ const SC_LAP = 1.45
 const SC_CATCH_LAP = 1.2
 const VSC_LAP = 1.35
 const SC_GAP = 0.6
-const RULE_PENALTY = 30
+/** Time added at the flag for not running two dry compounds in a dry race (s). */
+export const RULE_PENALTY = 30
 
 /** Lap-time fraction lost by the slowest team's car to the fastest. */
 const TEAM_SPREAD = 0.22
@@ -273,6 +274,22 @@ export function cloneRace(state: RaceState): RaceState {
     weather: { ...state.weather, plan: state.weather.plan },
     log: state.log.slice(),
   }
+}
+
+/**
+ * A copy of a race without its lap-by-lap history or log: cheap to clone
+ * again and again for rollouts that only need the result.
+ */
+export function stripHistory(state: RaceState): RaceState {
+  const copy = cloneRace(state)
+  for (const car of copy.cars) {
+    car.lapTimes = []
+    car.positions = []
+    car.gaps = []
+    car.stints = []
+  }
+  copy.log = []
+  return copy
 }
 
 /** Clean-air lap time for a car in its current state, before traffic and luck (s). */
@@ -452,10 +469,12 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
 
     let cross: number
     if (safety === 'sc') {
-      // Catch the queue, then sit in it.
+      // Catch the queue, then sit in it. A stop is made from the queue, so its
+      // time comes on top: the car rejoins behind everyone it was holding up.
       const pace = blockCross === -Infinity ? SC_LAP : SC_CATCH_LAP
-      cross = car.time + Math.max(params.baseLap * pace, lap * 0.9) + pitTime
-      if (!pit && blockCross !== -Infinity) cross = Math.max(cross, blockCross + SC_GAP)
+      cross = car.time + Math.max(params.baseLap * pace, lap * 0.9)
+      if (blockCross !== -Infinity) cross = Math.max(cross, blockCross + SC_GAP)
+      cross += pitTime
     } else if (safety === 'vsc') {
       cross = car.time + Math.max(lap, params.baseLap * VSC_LAP) + pitTime
       if (!pit && blockCross !== -Infinity) cross = Math.max(cross, blockCross + MIN_GAP)

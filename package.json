@@ -15,7 +15,8 @@
     "sim:train": "tsx scripts/train.ts",
     "sim:race": "tsx scripts/race.ts",
     "sim:lap": "tsx scripts/lap.ts",
-    "sim:optimise": "tsx scripts/optimise.ts"
+    "sim:optimise": "tsx scripts/optimise.ts",
+    "sim:pitwall": "tsx scripts/pitwall.ts"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",

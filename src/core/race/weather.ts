@@ -86,3 +86,29 @@ export function forecast(weather: Weather, fromLap: number, horizon: number, noi
   }
   return out
 }
+
+/**
+ * The same sky up to lap index `keep`, and a fresh roll of the dice after
+ * it: one of the futures the pit wall has to allow for, since a forecast is
+ * only good for a few laps. Returns a new Weather; the original is untouched.
+ */
+export function rerollWeather(weather: Weather, keep: number, rng: Rng, rainChance: number): Weather {
+  const laps = weather.plan.length
+  const plan = weather.plan.slice()
+  const chance = Math.min(0.98, Math.max(0, rainChance))
+  const start = chance <= 0 ? 0 : 1 - Math.pow(1 - chance, 1 / Math.max(1, laps))
+  const from = Math.max(0, keep)
+  let intensity = from > 0 ? (plan[from - 1] ?? 0) : 0
+  let raining = intensity > 0
+  for (let lap = from; lap < laps; lap++) {
+    if (!raining && nextFloat(rng) < start) {
+      raining = true
+      intensity = nextRange(rng, 0.25, 0.7)
+    } else if (raining) {
+      if (nextFloat(rng) < 1 / SPELL_LAPS) raining = false
+      else intensity = Math.min(1, Math.max(0.2, intensity + nextRange(rng, -0.15, 0.2)))
+    }
+    plan[lap] = raining ? intensity : 0
+  }
+  return { plan, rain: weather.rain, wetness: weather.wetness }
+}

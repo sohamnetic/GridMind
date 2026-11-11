@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // The Monte Carlo tests run thousands of races: quick, but not on a busy machine.
+    testTimeout: 30_000,
   },
 })
