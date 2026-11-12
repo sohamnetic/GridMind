@@ -167,6 +167,9 @@ const SC_GAP = 0.6
 /** Time added at the flag for not running two dry compounds in a dry race (s). */
 export const RULE_PENALTY = 30
 
+/** Lap length the incident rates are written for (m). */
+const INCIDENT_LAP = 5000
+
 /** Lap-time fraction lost by the slowest team's car to the fastest. */
 const TEAM_SPREAD = 0.22
 
@@ -402,6 +405,8 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
   // --- Retirements, which can bring out a safety car for the following laps ---
   // Every roll comes from this lap's own stream, in a fixed order, so one
   // car's luck does not depend on what the others did.
+  // Trouble comes per kilometre, not per lap: a race of many short laps is no more dangerous.
+  const distance = setup.profile.length / INCIDENT_LAP
   const incident = createRng(deriveSeed(state.incidentSeed, lapNo))
   const deployRoll = nextFloat(incident)
   const strayRoll = nextFloat(incident)
@@ -413,7 +418,7 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
     const roll = nextFloat(incident)
     if (!car.running) continue
     const mismatch = conditionsPenalty(car.compound, wetness)
-    let risk = 0.001 + 0.001 * wetness + (mismatch > 3 ? 0.012 : 0) + (car.wear > 1.15 ? 0.01 : 0)
+    let risk = (0.0018 + 0.0018 * wetness + (mismatch > 3 ? 0.02 : 0) + (car.wear > 1.15 ? 0.016 : 0)) * distance
     if (lapNo === 1) risk += 0.006
     if (safety !== 'none') risk *= 0.2
     if (roll < risk * incidents) {
@@ -421,17 +426,17 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
       car.outLap = lapNo
       log({ type: 'out', car: i })
       if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2) {
-        deploy = deployRoll < 0.4 ? 'sc' : deployRoll < 0.7 ? 'vsc' : 'none'
+        deploy = deployRoll < 0.33 ? 'sc' : deployRoll < 0.58 ? 'vsc' : 'none'
       }
     }
   }
-  if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2 && strayRoll < 0.003 * incidents) {
+  if (safety === 'none' && deploy === 'none' && lapNo < state.totalLaps - 2 && strayRoll < 0.0025 * distance * incidents) {
     deploy = strayKind < 0.4 ? 'sc' : 'vsc'
   }
 
   // --- Lap times, in running order ---
   const speedFactor = safety === 'sc' ? 0.4 : safety === 'vsc' ? 0.6 : 1
-  const need = (0.3 + 2.2 * params.overtakingDifficulty) * (lapNo === 1 ? 0.6 : 1)
+  const need = (0.5 + 3 * params.overtakingDifficulty) * (lapNo === 1 ? 0.6 : 1)
   let blockCross = -Infinity // crossing time of the car directly ahead on the road
   let blockLap = 0 // that car's lap time this lap
   let blockCar = -1
