@@ -222,7 +222,8 @@ export function DriverEvolution() {
                   {saved && (
                     <div className="saved-driver">
                       <p>
-                        Saved drivers for this circuit: generation {saved.generation}, best lap{' '}
+                        {saved.bundled ? 'Pre-trained drivers come with this circuit' : 'Saved drivers for this circuit'}:
+                        generation {saved.generation}, best lap{' '}
                         <span className="mono">{formatLapTime(saved.recordLap)}</span>
                         {saved.trackKey !== studioKey && ' (trained before the circuit was last edited)'}
                       </p>
@@ -234,16 +235,18 @@ export function DriverEvolution() {
                         >
                           Continue
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('Delete the saved drivers for this circuit? This cannot be undone.')) {
-                              void actions.discardSaved(studioDef.id)
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
+                        {!saved.bundled && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Delete the saved drivers for this circuit? This cannot be undone.')) {
+                                void actions.discardSaved(studioDef.id)
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

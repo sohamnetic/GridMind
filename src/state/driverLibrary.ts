@@ -1,6 +1,7 @@
 import { del, get, set } from 'idb-keyval'
+import { decodeFloats, isDriverFile, type DriverFile } from '../core/evolution/driverFile'
 import type { GenerationStats } from '../core/evolution/trainer'
-import type { TrackDef } from '../core/track/types'
+import { trackKey } from '../core/track/serialize'
 import type { TrafficStats } from '../core/evolution/trafficTrainer'
 import type { TrafficSnapshot } from '../workers/raceProtocol'
 import type { TrainingSnapshot } from '../workers/trainingProtocol'
@@ -28,6 +29,59 @@ export interface SavedDriver {
     snapshot: TrafficSnapshot
     history: TrafficStats[]
   }
+  /** True for the pre-trained drivers that ship with a preset circuit, until the user trains them further. */
+  bundled?: boolean
+}
+
+function fromFile(file: DriverFile): SavedDriver {
+  return {
+    version: 1,
+    trackId: file.trackId,
+    trackKey: file.trackKey,
+    layout: file.layout,
+    populationSize: file.populationSize,
+    seed: file.seed,
+    snapshot: {
+      population: decodeFloats(file.population),
+      generation: file.generation,
+      recordLap: file.recordLap,
+      recordGenome: file.recordGenome ? decodeFloats(file.recordGenome) : null,
+      timeLimit: file.timeLimit,
+    },
+    history: file.history,
+    ghost: file.ghost ? decodeFloats(file.ghost) : null,
+    savedAt: 0,
+    bundled: true,
+  }
+}
+
+const bundledFiles = new Map<string, Promise<DriverFile | null>>()
+
+/**
+ * The pre-trained drivers that ship with a preset circuit, fetched from the
+ * site's own static files the first time they are wanted.
+ */
+async function loadBundled(trackId: string, layout: readonly number[]): Promise<SavedDriver | null> {
+  if (!trackId.startsWith('preset-') || typeof fetch === 'undefined' || typeof document === 'undefined') return null
+  let pending = bundledFiles.get(trackId)
+  if (!pending) {
+    pending = fetch(new URL(`drivers/${trackId}.json`, document.baseURI))
+      .then((response) => (response.ok ? (response.json() as Promise<unknown>) : null))
+      .then((data) => (isDriverFile(data) ? data : null))
+      .catch(() => null)
+    bundledFiles.set(trackId, pending)
+  }
+  const file = await pending
+  if (!file || file.layout.join() !== layout.join()) return null
+  // Decoded afresh each time, so nobody is handed arrays another caller may have changed.
+  const driver = fromFile(file)
+  return driver.snapshot.population.length === file.populationSize * weightCount(layout) ? driver : null
+}
+
+function weightCount(layout: readonly number[]): number {
+  let count = 0
+  for (let l = 0; l < layout.length - 1; l++) count += (layout[l] + 1) * layout[l + 1]
+  return count
 }
 
 /** Solo-trained networks in the order racing wants them: record holder first. */
@@ -40,6 +94,11 @@ export function soloDrivers(driver: SavedDriver): Float32Array {
 const key = (trackId: string) => `gridmind:driver:${trackId}`
 
 export async function loadDriver(trackId: string, layout: readonly number[]): Promise<SavedDriver | null> {
+  return (await loadStored(trackId, layout)) ?? (await loadBundled(trackId, layout))
+}
+
+/** Drivers the user trained and saved in this browser. */
+async function loadStored(trackId: string, layout: readonly number[]): Promise<SavedDriver | null> {
   try {
     const saved = await get<SavedDriver>(key(trackId))
     if (!saved || saved.version !== 1) return null
@@ -53,7 +112,10 @@ export async function loadDriver(trackId: string, layout: readonly number[]): Pr
 
 export async function storeDriver(driver: SavedDriver): Promise<boolean> {
   try {
-    await set(key(driver.trackId), driver)
+    // Once stored they are the user's own drivers, whatever they started from.
+    const { bundled: _bundled, ...own } = driver
+    void _bundled
+    await set(key(driver.trackId), { ...own, savedAt: own.savedAt || Date.now() })
     return true
   } catch {
     return false
@@ -68,23 +130,4 @@ export async function deleteDriver(trackId: string): Promise<void> {
   }
 }
 
-/**
- * Short fingerprint of everything that changes how a track drives. Used to
- * notice that a circuit was edited after its drivers were trained.
- */
-export function trackKey(def: TrackDef): string {
-  const text = JSON.stringify([
-    def.points,
-    def.width,
-    def.kerbWidth,
-    def.runoffWidth,
-    def.startFraction,
-    def.sectors,
-  ])
-  let h = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return (h >>> 0).toString(16)
-}
+export { trackKey }

@@ -3,7 +3,7 @@ import { DRIVER_LAYOUT } from '../../core/evolution/trainer'
 import { estimateProfile, measureProfile, type TrackProfile } from '../../core/profile/trackProfile'
 import type { TrackAnalysis } from '../../core/track/analysis'
 import type { BuiltTrack } from '../../core/track/types'
-import { loadDriver } from '../../state/driverLibrary'
+import { loadDriver, trackKey } from '../../state/driverLibrary'
 
 interface Scene {
   track: BuiltTrack | null
@@ -30,6 +30,8 @@ export function useTrackProfile(trackId: string, scene: Scene): TrackProfile | n
     let cancelled = false
     void loadDriver(trackId, DRIVER_LAYOUT.sizes).then((driver) => {
       if (cancelled || !driver?.ghost || driver.snapshot.recordLap === null) return
+      // A lap set before the circuit was edited says nothing about the circuit as it is now.
+      if (driver.trackKey !== trackKey(track.def)) return
       const profile = measureProfile(track, analysis, driver.ghost, driver.snapshot.recordLap, pitLength)
       setMeasured({ key: track, profile })
     })

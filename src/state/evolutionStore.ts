@@ -35,6 +35,8 @@ export interface SavedSummary {
   recordLap: number | null
   savedAt: number
   trackKey: string
+  /** The pre-trained drivers that ship with a preset, not ones saved in this browser. */
+  bundled: boolean
 }
 
 interface EvolutionState {
@@ -126,6 +128,7 @@ export const useEvolutionStore = create<EvolutionState>((set, get) => {
           recordLap: snapshot.recordLap,
           savedAt: driver.savedAt,
           trackKey: driver.trackKey,
+          bundled: false,
         },
       })
     }
@@ -199,6 +202,7 @@ export const useEvolutionStore = create<EvolutionState>((set, get) => {
               recordLap: driver.snapshot.recordLap,
               savedAt: driver.savedAt,
               trackKey: driver.trackKey,
+              bundled: driver.bundled === true,
             }
           : null,
       })
@@ -283,7 +287,8 @@ export const useEvolutionStore = create<EvolutionState>((set, get) => {
 
     discardSaved: async (trackId) => {
       await deleteDriver(trackId)
-      set({ saved: null })
+      // A preset falls back to the drivers it shipped with.
+      await get().refreshSaved(trackId)
     },
 
     setFramesEnabled: (enabled) => send({ type: 'frames', enabled }),

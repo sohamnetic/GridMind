@@ -135,3 +135,24 @@ export function reverseTrack(def: TrackDef): TrackDef {
       : null,
   }
 }
+
+/**
+ * Short fingerprint of everything that changes how a track drives. Used to
+ * notice that a circuit was edited after its drivers were trained.
+ */
+export function trackKey(def: TrackDef): string {
+  const text = JSON.stringify([
+    def.points,
+    def.width,
+    def.kerbWidth,
+    def.runoffWidth,
+    def.startFraction,
+    def.sectors,
+  ])
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16)
+}
