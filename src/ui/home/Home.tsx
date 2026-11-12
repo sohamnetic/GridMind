@@ -1,14 +1,16 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { TEAMS } from '../../core/race/grid'
 import { analyseTrack } from '../../core/track/analysis'
 import { buildTrack } from '../../core/track/build'
 import { createPresets } from '../../core/track/presets'
 import type { BuiltTrack, TrackDef } from '../../core/track/types'
+import { useSeasonStore } from '../../state/seasonStore'
 import { useStudioStore } from '../../state/studioStore'
 import { flowSteps, nextStep, type FlowStatus } from '../app/flow'
 import { ModuleIcon } from '../app/icons'
 import type { Route } from '../app/useHashRoute'
 import './home.css'
+import '../season/season.css'
 
 /** What each preset is like to race on, in a few words. */
 const CHARACTER: Record<string, string> = {
@@ -31,7 +33,7 @@ function viewBox(track: BuiltTrack, pad: number): string {
   return `${(minX - pad).toFixed(0)} ${(minY - pad).toFixed(0)} ${(maxX - minX + 2 * pad).toFixed(0)} ${(maxY - minY + 2 * pad).toFixed(0)}`
 }
 
-function Thumbnail({ track }: { track: BuiltTrack }) {
+export function Thumbnail({ track }: { track: BuiltTrack }) {
   const d = outline(track, 3)
   return (
     <svg className="thumb" viewBox={viewBox(track, track.length * 0.03)} aria-hidden="true">
@@ -80,6 +82,12 @@ export function Home({ status, navigate }: Props) {
   const hasEdits = useStudioStore((s) => s.past.length > 0)
   const loadTrack = useStudioStore((s) => s.loadTrack)
   const newTrack = useStudioStore((s) => s.newTrack)
+  const season = useSeasonStore((s) => s.season)
+  const hydrateSeason = useSeasonStore((s) => s.hydrate)
+  useEffect(() => {
+    void hydrateSeason()
+  }, [hydrateSeason])
+  const seasonRound = season ? season.rounds[Math.min(season.round, season.rounds.length - 1)] : null
 
   const presets = useMemo(
     () =>
@@ -135,6 +143,26 @@ export function Home({ status, navigate }: Props) {
           <p className="hero-note">Free, no account, nothing uploaded. A coach strip on every screen says what to do next.</p>
         </div>
         <div className="hero-art">{hero && <HeroCircuit track={hero.track} />}</div>
+      </section>
+
+      <section className="season-banner" aria-labelledby="season-banner-title">
+        <div>
+          <p className="season-eyebrow">Championship</p>
+          <h2 id="season-banner-title">
+            {season && seasonRound
+              ? season.stage === 'finished'
+                ? 'Your season is over: see how it ended'
+                : `Your season: round ${season.round + 1} of ${season.rounds.length}, ${seasonRound.name}`
+              : 'Run a team through a whole season'}
+          </h2>
+          <p>
+            Every round is a race weekend: practice to set the car up, a knockout qualifying, then the race from the
+            pit wall. Points go into the tables, prize money into developing the car.
+          </p>
+        </div>
+        <button type="button" className="cta" onClick={() => navigate('season')}>
+          {season ? 'Carry on' : 'Start a season'} <span aria-hidden="true">→</span>
+        </button>
       </section>
 
       <section className="home-section" aria-labelledby="pick-title">

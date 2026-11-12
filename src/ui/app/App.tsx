@@ -6,6 +6,7 @@ import { Home } from '../home/Home'
 import { StrategyOptimiser } from '../optimiser/StrategyOptimiser'
 import { LivePitWall } from '../pitwall/LivePitWall'
 import { RaceScreen } from '../race/RaceScreen'
+import { SeasonScreen } from '../season/SeasonScreen'
 import { TrackStudio } from '../studio/TrackStudio'
 import { Coach, useCoachPreference } from './CoachStrip'
 import { flowSteps, nextStep } from './flow'
@@ -99,6 +100,20 @@ export function App() {
         </nav>
 
         <div className="topbar-end">
+          <a
+            className={active === 'season' ? 'season-link is-active' : 'season-link'}
+            href="#/season"
+            aria-current={active === 'season' ? 'page' : undefined}
+            title="Championship: a season of race weekends"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                d="M7 4h10v3a5 5 0 0 1-10 0V4Zm-3 1h3v2a3 3 0 0 1-3-2Zm16 0h-3v2a3 3 0 0 0 3-2ZM10 13.5h4V17h2.5v3h-9v-3H10v-3.5Z"
+                fill="currentColor"
+              />
+            </svg>
+            <span>Season</span>
+          </a>
           {!coachOn && active !== 'home' && (
             <button type="button" className="coach-toggle" onClick={() => setCoachOn(true)} title="Show what to do on this screen">
               Coach
@@ -111,9 +126,11 @@ export function App() {
         <Coach route={active} status={status} drivers={drivers} navigate={navigate} onHide={() => setCoachOn(false)} />
       )}
 
-      <main className={active === 'home' ? 'workspace is-home' : 'workspace'}>
+      <main className={active === 'home' || active === 'season' ? 'workspace is-home' : 'workspace'}>
         {active === 'home' ? (
           <Home status={status} navigate={navigate} />
+        ) : active === 'season' ? (
+          <SeasonScreen navigate={navigate} />
         ) : active === 'studio' ? (
           <TrackStudio />
         ) : active === 'evolution' ? (

@@ -17,7 +17,8 @@
     "sim:lap": "tsx scripts/lap.ts",
     "sim:optimise": "tsx scripts/optimise.ts",
     "sim:pitwall": "tsx scripts/pitwall.ts",
-    "sim:pretrain": "tsx scripts/pretrain.ts"
+    "sim:pretrain": "tsx scripts/pretrain.ts",
+    "sim:season": "tsx scripts/season.ts"
   },
   "dependencies": {
     "@fontsource/titillium-web": "^5.3.0",

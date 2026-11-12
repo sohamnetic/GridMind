@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import { trackKey } from '../../state/driverLibrary'
 import { useEvolutionStore } from '../../state/evolutionStore'
 import { useOptimiserStore } from '../../state/optimiserStore'
+import { playerRunning, startQualifying } from '../../core/season/qualifying'
+import { AREAS, canBuy, currentRound } from '../../core/season/season'
 import { usePitWallStore } from '../../state/pitwallStore'
+import { useSeasonStore } from '../../state/seasonStore'
 import { useStudioStore } from '../../state/studioStore'
-import { coachTip, type CoachState } from './coachTips'
+import { coachTip, seasonTip, type CoachState, type SeasonCoachState } from './coachTips'
 import type { FlowStatus } from './flow'
 import type { ModuleId } from './modules'
 import type { DriversFound } from './useFlowStatus'
@@ -47,6 +50,7 @@ function useCoachState(route: ModuleId, status: FlowStatus, drivers: DriversFoun
   const deciding = usePitWallStore((s) => s.decisions.length > 0)
   const retired = usePitWallStore((s) => s.race !== null && s.race.cars[s.driver]?.running === false)
   const debriefDone = usePitWallStore((s) => s.debrief.status === 'done')
+  const seasonRace = usePitWallStore((s) => s.event !== null)
   const here = sessionKey === key
 
   return {
@@ -62,7 +66,28 @@ function useCoachState(route: ModuleId, status: FlowStatus, drivers: DriversFoun
     bundledDrivers: drivers.bundled,
     bestLap: drivers.recordLap,
     optimiserRunning,
-    pitwall: { phase, playing, lap, deciding, retired, debriefDone },
+    pitwall: { phase, playing, lap, deciding, retired, debriefDone, season: seasonRace },
+  }
+}
+
+/** What the season's coach goes by, read from the season and the pit wall. */
+function useSeasonCoachState(): SeasonCoachState {
+  const season = useSeasonStore((s) => s.season)
+  const event = usePitWallStore((s) => s.event)
+  const phase = usePitWallStore((s) => s.phase)
+  if (!season) {
+    return { stage: 'none', round: 1, rounds: 1, circuit: '', qualiPart: 1, inQualifying: false, racing: false, canBuy: false }
+  }
+  const quali = season.stage === 'qualifying' ? (season.qualifying ?? startQualifying(season)) : season.qualifying
+  return {
+    stage: season.stage,
+    round: season.round + 1,
+    rounds: season.rounds.length,
+    circuit: currentRound(season).name,
+    qualiPart: (quali?.segments.length ?? 0) + 1,
+    inQualifying: quali ? playerRunning(season, quali) : false,
+    racing: event !== null && event.season === season.seed && event.round === season.round && phase === 'race',
+    canBuy: AREAS.some((area) => canBuy(season, area.id)),
   }
 }
 
@@ -82,8 +107,10 @@ interface Props {
 
 /** A strip under the top bar: where you are, what to do here, and the button that takes you on. */
 export function Coach({ route, status, drivers, navigate, onHide }: Props) {
-  const state = useCoachState(route === 'home' ? 'studio' : route, status, drivers)
-  const tip = coachTip(state)
+  const state = useCoachState(route === 'home' || route === 'season' ? 'studio' : route, status, drivers)
+  const seasonState = useSeasonCoachState()
+  const tip = route === 'season' ? seasonTip(seasonState) : coachTip(state)
+  const badge = tip.badge ?? ['Step', String(tip.step), 'of 5']
   const target = route === 'home' ? undefined : tip.target
 
   // The control the coach is talking about glows. Screens redraw and drop the
@@ -117,9 +144,9 @@ export function Coach({ route, status, drivers, navigate, onHide }: Props) {
   return (
     <aside className={tip.done ? 'coach is-done' : 'coach'} aria-label="Coach: what to do on this screen">
       <div className="coach-step" aria-hidden="true">
-        <span>Step</span>
-        <b>{tip.step}</b>
-        <span>of 5</span>
+        <span>{badge[0]}</span>
+        <b>{badge[1]}</b>
+        <span>{badge[2]}</span>
       </div>
       <div className="coach-body" aria-live="polite">
         <strong>{tip.title}</strong>

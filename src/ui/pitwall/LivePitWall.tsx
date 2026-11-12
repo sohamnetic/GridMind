@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DRIVER_LAYOUT } from '../../core/evolution/trainer'
 import type { Plan } from '../../core/pitwall/replan'
-import type { RaceState } from '../../core/race/engine'
+import { lapPath } from '../../core/pitwall/session'
+import { carParams, type RaceState } from '../../core/race/engine'
 import { DRIVERS, TEAMS } from '../../core/race/grid'
 import {
   bestDryCompound,
@@ -14,7 +15,6 @@ import {
 import { bestForConditions, COMPOUNDS, type Compound } from '../../core/race/tyres'
 import { analyseTrack, isDrivable, validateTrack } from '../../core/track/analysis'
 import { buildTrack } from '../../core/track/build'
-import type { BuiltTrack } from '../../core/track/types'
 import { buildTrackPaths } from '../../render/trackRenderer'
 import { loadDriver, trackKey } from '../../state/driverLibrary'
 import { defaultLaps, LAP_OPTIONS } from '../../state/fullRaceStore'
@@ -34,25 +34,6 @@ import './pitwall.css'
 const CAR_STYLE = {
   colors: DRIVERS.map((d) => TEAMS[d.team].color),
   labels: DRIVERS.map((d) => d.code),
-}
-
-/** The lap the cars are drawn along: the trained drivers' racing line if there is one, else the centreline. */
-function lapPath(track: BuiltTrack, ghost: Float32Array | null): Float32Array {
-  if (ghost && ghost.length >= 90) {
-    const out = new Float32Array((ghost.length / 3) * 2)
-    for (let i = 0, o = 0; i + 2 < ghost.length; i += 3, o += 2) {
-      out[o] = ghost[i]
-      out[o + 1] = ghost[i + 1]
-    }
-    return out
-  }
-  const out = new Float32Array(track.n * 2)
-  for (let k = 0; k < track.n; k++) {
-    const i = (track.startIndex + k) % track.n
-    out[k * 2] = track.x[i]
-    out[k * 2 + 1] = track.y[i]
-  }
-  return out
 }
 
 function describePlan(strategy: Strategy): string {
@@ -78,7 +59,10 @@ function suggestedTyre(race: RaceState, driver: number, plan: Plan | null, param
 
 /** The Live Pit Wall: run one car's race from the pit wall, lap by lap, then go through the debrief. */
 export function LivePitWall() {
-  const def = useStudioStore((s) => s.def)
+  const studioDef = useStudioStore((s) => s.def)
+  const event = usePitWallStore((s) => s.event)
+  // A season's race is on the season's circuit, whatever is open in the Track Studio.
+  const def = event?.def ?? studioDef
   const phase = usePitWallStore((s) => s.phase)
   const lapsChoice = usePitWallStore((s) => s.laps)
   const rainChance = usePitWallStore((s) => s.rainChance)
@@ -158,7 +142,13 @@ export function LivePitWall() {
   }, [profile, laps, driver, study, def.id])
   const chosen = plans[Math.min(planIndex, Math.max(0, plans.length - 1))]
 
-  const params = useMemo(() => (setup ? raceParams(setup.profile, setup.laps) : null), [setup])
+  const params = useMemo(() => (setup ? carParams(setup, driver) : null), [setup, driver])
+  /** Leaves the race; a season's race goes back to the season. */
+  const exit = () => {
+    const season = event !== null
+    actions.leave()
+    if (season) window.location.hash = '/season'
+  }
   const active = phase !== 'setup' && race !== null && setup !== null && params !== null
   const me = active ? race.cars[driver] : null
   const otherTrack = active && raceTrack !== null && raceTrack.id !== def.id
@@ -172,8 +162,9 @@ export function LivePitWall() {
           <section className="panel">
             <h2>Race over</h2>
             {error && <p className="issue issue-error">{error}</p>}
-            <button type="button" className="primary" data-coach="new-race" onClick={actions.leave}>
-              New race
+            {event && <p className="muted">{event.title}. The result is in the championship table.</p>}
+            <button type="button" className="primary" data-coach="new-race" onClick={exit}>
+              {event ? 'Back to the season' : 'New race'}
             </button>
           </section>
           <section className="panel">
@@ -378,6 +369,7 @@ export function LivePitWall() {
           <>
             <section className="panel">
               <h2>Race control</h2>
+              {event && <p className="muted">{event.title}</p>}
               {error && <p className="issue issue-error">{error}</p>}
               {otherTrack && (
                 <p className="issue issue-warning">
@@ -396,7 +388,15 @@ export function LivePitWall() {
                 <button type="button" onClick={actions.nextLap} title="Finish this lap at once">
                   Next lap
                 </button>
-                <button type="button" onClick={actions.leave} title="Abandon this race and go back to the setup">
+                <button
+                  type="button"
+                  onClick={exit}
+                  title={
+                    event
+                      ? 'Abandon this race and go back to the season: the race is still to be run'
+                      : 'Abandon this race and go back to the setup'
+                  }
+                >
                   Abandon
                 </button>
               </div>

@@ -1,5 +1,14 @@
 import type { TrackProfile } from '../profile/trackProfile'
-import { createRace, stepLap, type CarOrder, type RaceSetup, type RaceState, type SafetyCar } from '../race/engine'
+import {
+  createRace,
+  stepLap,
+  type CarOrder,
+  type CarTuning,
+  type RaceSetup,
+  type RaceState,
+  type SafetyCar,
+} from '../race/engine'
+import type { BuiltTrack } from '../track/types'
 import { raceParams, rankStrategies, type RaceParams, type Strategy } from '../race/strategy'
 import { bestForConditions, CLIFF_WEAR, COMPOUNDS, wearPerLap, type Compound } from '../race/tyres'
 import { planFrom, type Plan } from './replan'
@@ -19,6 +28,10 @@ export interface PitWallConfig {
   driver: number
   /** The plan the player starts with: it sets the starting tyres. */
   strategy: Strategy
+  /** A grid from a qualifying session, driver indices from pole back. */
+  grid?: number[]
+  /** How each car differs from the standard one. */
+  tuning?: CarTuning[]
 }
 
 export function sessionSetup(config: PitWallConfig): RaceSetup {
@@ -31,7 +44,33 @@ export function sessionSetup(config: PitWallConfig): RaceSetup {
     plans: rankStrategies(raceParams(config.profile, config.laps)).map((r) => r.strategy),
     manual: [config.driver],
     player: { driver: config.driver, strategy: config.strategy },
+    ...(config.grid ? { grid: config.grid } : {}),
+    ...(config.tuning ? { tuning: config.tuning } : {}),
   }
+}
+
+/**
+ * The lap the cars are drawn along, as x, y pairs from the start line: the
+ * trained drivers' racing line if there is one, else the centreline.
+ *
+ * @param ghost a recorded lap as x, y, speed triplets
+ */
+export function lapPath(track: BuiltTrack, ghost: Float32Array | null): Float32Array {
+  if (ghost && ghost.length >= 90) {
+    const out = new Float32Array((ghost.length / 3) * 2)
+    for (let i = 0, o = 0; i + 2 < ghost.length; i += 3, o += 2) {
+      out[o] = ghost[i]
+      out[o + 1] = ghost[i + 1]
+    }
+    return out
+  }
+  const out = new Float32Array(track.n * 2)
+  for (let k = 0; k < track.n; k++) {
+    const i = (track.startIndex + k) % track.n
+    out[k * 2] = track.x[i]
+    out[k * 2 + 1] = track.y[i]
+  }
+  return out
 }
 
 /** The player's car in a pit-wall setup. */

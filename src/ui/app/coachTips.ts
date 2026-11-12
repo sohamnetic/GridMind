@@ -19,6 +19,11 @@ export type CoachTarget =
   | 'decision'
   | 'pit-call'
   | 'new-race'
+  | 'season-start'
+  | 'season-practice'
+  | 'season-qualify'
+  | 'season-grid'
+  | 'season-next'
 
 export interface CoachState {
   route: ModuleId
@@ -38,6 +43,8 @@ export interface CoachState {
     deciding: boolean
     retired: boolean
     debriefDone: boolean
+    /** The race is a round of a season. */
+    season?: boolean
   }
 }
 
@@ -49,7 +56,9 @@ export interface CoachTip {
   /** The control to press now, if there is one. */
   target?: CoachTarget
   /** Where to go next, once this screen's job is done. */
-  next?: { label: string; to: ModuleId }
+  next?: { label: string; to: ModuleId | 'season' }
+  /** What the badge on the left says, when it is not "Step n of 5": a word, the large figure, a word. */
+  badge?: [string, string, string]
   /** The screen's job is done. */
   done: boolean
 }
@@ -202,7 +211,7 @@ export function coachTip(state: CoachState): CoachTip {
           step: 5,
           title: debriefDone ? 'Debrief ready' : 'Replaying your calls',
           text: debriefDone
-            ? 'Every call is rated against the strategy engine. The costly ones are where the places went. Press New race to try again.'
+            ? `Every call is rated against the strategy engine. The costly ones are where the places went. Press ${state.pitwall.season ? 'Back to the season to see the points' : 'New race to try again'}.`
             : 'The strategy engine is playing the race out from every lap, once for each option you had.',
           target: debriefDone ? 'new-race' : undefined,
           done: debriefDone,
@@ -240,5 +249,106 @@ export function coachTip(state: CoachState): CoachTip {
         done: false,
       }
     }
+  }
+}
+
+// ---------- The championship ----------
+
+/** What the season's coach goes by. */
+export interface SeasonCoachState {
+  /** Where the weekend stands, or 'none' with no season started. */
+  stage: 'none' | 'practice' | 'qualifying' | 'race' | 'results' | 'finished'
+  /** The round in progress, from 1, and how many the season has. */
+  round: number
+  rounds: number
+  circuit: string
+  /** The part of qualifying coming next, from 1. */
+  qualiPart: number
+  /** The player's car still has a qualifying lap to drive. */
+  inQualifying: boolean
+  /** This round's race is under way on the pit wall. */
+  racing: boolean
+  /** The budget covers at least one upgrade. */
+  canBuy: boolean
+}
+
+export function seasonTip(state: SeasonCoachState): CoachTip {
+  const badge: [string, string, string] = ['Round', String(state.round), `of ${state.rounds}`]
+  switch (state.stage) {
+    case 'none':
+      return {
+        step: 0,
+        badge: ['New', '★', 'season'],
+        title: 'Start a championship',
+        text: 'Pick a team and one of its cars, then press Start the season. A front-runner is the easy way in; a backmarker is a long climb.',
+        target: 'season-start',
+        done: false,
+      }
+    case 'practice':
+      return {
+        step: 0,
+        badge,
+        title: `Practice at ${state.circuit}`,
+        text: 'Share the six blocks between the three programmes with + and −, then press Run practice. Where passing is hard, grid position is worth more than race pace.',
+        target: 'season-practice',
+        done: false,
+      }
+    case 'qualifying':
+      return state.inQualifying
+        ? {
+            step: 0,
+            badge,
+            title: `Qualifying: Q${state.qualiPart}`,
+            text: `Choose how hard to push on each of the two runs, then press Run Q${state.qualiPart}. A banker lap first keeps a time on the board if the second run goes wrong.`,
+            target: 'season-qualify',
+            done: false,
+          }
+        : {
+            step: 0,
+            badge,
+            title: 'Your qualifying is over',
+            text: 'Press Run the rest of qualifying to settle the grid for the others.',
+            target: 'season-qualify',
+            done: false,
+          }
+    case 'race':
+      return state.racing
+        ? {
+            step: 0,
+            badge,
+            title: 'The race is under way',
+            text: 'It is waiting for you on the pit wall, with the clock stopped.',
+            target: 'season-grid',
+            next: { label: 'Back to the pit wall', to: 'pitwall' },
+            done: false,
+          }
+        : {
+            step: 0,
+            badge,
+            title: `Race day at ${state.circuit}`,
+            text: 'Choose a starting plan and press Go to the grid to call the race yourself. Let the engineer run it if you would rather skip to the result.',
+            target: 'season-grid',
+            done: false,
+          }
+    case 'results':
+      return {
+        step: 0,
+        badge,
+        title: 'Race done',
+        text: state.canBuy
+          ? 'You can afford an upgrade: buy it under Development on the right, then move on to the next round.'
+          : 'Look over the result and the tables, then move on to the next round.',
+        target: 'season-next',
+        done: true,
+      }
+    case 'finished':
+      return {
+        step: 0,
+        badge: ['Season', '✓', 'over'],
+        title: 'The season is over',
+        text: 'The final tables are below. Start a new season to try another team, or the same one with different calls.',
+        target: 'season-next',
+        done: true,
+      }
   }
 }

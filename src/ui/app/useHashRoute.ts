@@ -1,8 +1,8 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { isModuleId, type ModuleId } from './modules'
 
-/** A screen of the app: the home page or one of the five modules. */
-export type Route = ModuleId | 'home'
+/** A screen of the app: the home page, one of the five modules, or the championship. */
+export type Route = ModuleId | 'home' | 'season'
 
 /**
  * Hash-based routing (`#/home`, `#/studio`, `#/pitwall`, ...).
@@ -12,6 +12,7 @@ export type Route = ModuleId | 'home'
  */
 export function parseRoute(hash: string): Route {
   const segment = hash.replace(/^#\/?/, '').split(/[/?]/)[0] ?? ''
+  if (segment === 'season') return 'season'
   return isModuleId(segment) ? segment : 'home'
 }
 

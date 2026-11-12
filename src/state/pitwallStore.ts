@@ -13,9 +13,19 @@ import {
   type Pulse,
 } from '../core/pitwall/session'
 import type { TrackProfile } from '../core/profile/trackProfile'
-import { cloneRace, createRace, stepLap, type CarOrder, type RaceSetup, type RaceState } from '../core/race/engine'
+import {
+  carParams,
+  cloneRace,
+  createRace,
+  stepLap,
+  type CarOrder,
+  type CarTuning,
+  type RaceSetup,
+  type RaceState,
+} from '../core/race/engine'
 import { DRIVERS } from '../core/race/grid'
-import { raceParams, type RaceParams, type Strategy } from '../core/race/strategy'
+import type { RaceParams, Strategy } from '../core/race/strategy'
+import type { TrackDef } from '../core/track/types'
 import { bestForConditions, COMPOUNDS, type Compound, type DriveMode } from '../core/race/tyres'
 import type { PitWallReply, PitWallRequest } from '../workers/pitwallProtocol'
 
@@ -63,6 +73,27 @@ export interface DebriefState {
   engine: EngineRun | null
 }
 
+/** A race that belongs to something bigger than the pit wall's own setup screen: a round of a season. */
+export interface PitWallEvent {
+  kind: 'season'
+  /** The season's seed and the round's index, so the result goes to the season it came from. */
+  season: number
+  round: number
+  /** The circuit raced on, which need not be the one open in the Track Studio. */
+  def: TrackDef
+  title: string
+}
+
+/** What an event decides for the race, in place of the setup screen's options. */
+export interface EventRace {
+  event: PitWallEvent
+  seed: number
+  rainChance: number
+  driver: number
+  grid?: number[]
+  tuning?: CarTuning[]
+}
+
 const NO_DEBRIEF: DebriefState = { status: 'idle', done: 0, total: 0, reviews: [], engine: null }
 
 interface PitWallStore {
@@ -75,6 +106,8 @@ interface PitWallStore {
   planIndex: number
 
   phase: 'setup' | 'race' | 'finished'
+  /** Set while the race on the pit wall is a round of a season. */
+  event: PitWallEvent | null
   track: { id: string; name: string } | null
   setup: RaceSetup | null
   /** The race as it stands after the last completed lap. */
@@ -101,6 +134,7 @@ interface PitWallStore {
     track: { id: string; name: string },
     strategy: Strategy,
     path: Float32Array,
+    eventRace?: EventRace,
   ) => void
   play: () => void
   pause: () => void
@@ -127,6 +161,8 @@ let path: Float32Array | null = null
 let fractions = new Float32Array(0)
 let params: RaceParams | null = null
 let pulse: Pulse | null = null
+/** The setup screen's own options, put back when an event's race is left. */
+let ownOptions: { seed: number; rainChance: number; driver: number } | null = null
 let adviceWorker: Worker | null = null
 let debriefWorkers: Worker[] = []
 let nextId = 1
@@ -320,6 +356,7 @@ export const usePitWallStore = create<PitWallStore>((set, get) => {
     planIndex: 0,
 
     phase: 'setup',
+    event: null,
     track: null,
     setup: null,
     race: null,
@@ -337,12 +374,23 @@ export const usePitWallStore = create<PitWallStore>((set, get) => {
 
     setOptions: (options) => set(options),
 
-    start: (profile, laps, track, strategy, lapPath) => {
-      const { seed, rainChance, driver } = get()
+    start: (profile, laps, track, strategy, lapPath, eventRace) => {
+      const now = get()
+      if (eventRace && !ownOptions) ownOptions = { seed: now.seed, rainChance: now.rainChance, driver: now.driver }
+      const { seed, rainChance, driver } = eventRace ?? now
       stopDebrief()
-      const setup = sessionSetup({ profile, laps, seed, rainChance, driver, strategy })
+      const setup = sessionSetup({
+        profile,
+        laps,
+        seed,
+        rainChance,
+        driver,
+        strategy,
+        grid: eventRace?.grid,
+        tuning: eventRace?.tuning,
+      })
       const race = createRace(setup)
-      params = raceParams(profile, laps)
+      params = carParams(setup, driver)
       path = lapPath
       const me = race.cars[driver]
       const plan = workingPlan(race, driver, params)
@@ -370,6 +418,10 @@ export const usePitWallStore = create<PitWallStore>((set, get) => {
       ]
       set({
         phase: 'race',
+        event: eventRace?.event ?? null,
+        seed,
+        rainChance,
+        driver,
         track,
         setup,
         race,
@@ -453,8 +505,12 @@ export const usePitWallStore = create<PitWallStore>((set, get) => {
       anim.after = null
       pitwallFrame.cars = null
       pitwallFrame.seq++
+      const own = ownOptions
+      ownOptions = null
       set({
+        ...(own ?? {}),
         phase: 'setup',
+        event: null,
         race: null,
         setup: null,
         orders: [],

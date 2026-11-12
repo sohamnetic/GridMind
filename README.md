@@ -18,6 +18,22 @@ browser: there is no server, no account and no paid service behind it.
 | 4 | Strategy Optimiser | Thousands of simulated races rank the pit strategies for one car. |
 | 5 | Live Pit Wall | You make the calls during a race; the debrief rates each one against the strategy engine. |
 
+### Championship season
+
+The **Season** button in the top bar starts a career: pick one of the ten teams and one of
+its two cars, and run it through a calendar of five or ten rounds. Every round is a race
+weekend:
+
+1. **Practice.** Six blocks of track time to share between qualifying pace, race pace and
+   pit-stop drills. The race runs come back as a chart of how each tyre wears that weekend.
+2. **Qualifying.** Three knockout parts (20 cars, then 15, then 10), two runs in each. You
+   choose how hard the driver pushes on every run: quicker laps against ruined ones.
+3. **The race.** On the Live Pit Wall, from your qualifying slot, or left to the engineer.
+
+Points go into the drivers' and teams' tables. Prize money buys development in four areas
+(aerodynamics, tyre care, pit crew, reliability), while the other teams find pace of their
+own every round. The career is saved in the browser.
+
 The home page offers the five preset circuits, which come with drivers already trained,
 so every module works on them straight away. On every screen a **coach strip** under the
 top bar says what to do there, makes the button it is talking about glow, and offers the
@@ -60,11 +76,12 @@ src/
     race/        lap-level engine: tyres, weather, strategies, the grid of teams and drivers
     strategy/    candidate strategies, Monte Carlo runs, statistics, staged search
     pitwall/     re-planning mid-race, rollouts, decision points, team radio, debrief
+    season/      championship: calendar, practice, knockout qualifying, points, development
   share/         a circuit packed into a link
   workers/       training, racing, Monte Carlo pool, pit-wall advice and debrief
   render/        canvas drawing of tracks and cars
   state/         zustand stores, saving to the browser
-  ui/            React screens: home, the app shell and coach, one folder per module
+  ui/            React screens: home, the app shell and coach, the season, one folder per module
 scripts/         headless runs of the same core code
 tests/           Vitest
 public/drivers/  pre-trained drivers for the preset circuits
@@ -86,6 +103,11 @@ public/drivers/  pre-trained drivers for the preset circuits
 - **The debrief has no hindsight.** Each call is judged by playing the race out many
   times from that lap, once for each option. The weather in those futures follows the
   forecast for a few laps and is rolled afresh beyond it.
+- **A season is a plain object too.** Each step (a practice session, a part of qualifying,
+  a race result, an upgrade) is a function from one season to the next, drawn from the
+  season's seed, so the same choices always give the same season. The race itself is the
+  ordinary race engine, given the qualifying grid and a list of how each car differs from
+  the standard one.
 - **Workers share nothing.** They exchange messages and hand typed arrays over, because
   GitHub Pages cannot send the headers that shared memory needs.
 - **Share links carry the circuit itself**, compressed, after the `#`. That part of an
@@ -114,6 +136,7 @@ Headless runs of the simulation, for calibration and checking:
 | `npm run sim:optimise` | A strategy study, run twice to compare | `[preset] [laps] [rain chance] [driver] [final runs] [seed]` |
 | `npm run sim:pitwall` | A pit-wall race, its radio and its debrief | `[preset] [laps] [rain chance] [driver] [seed] [samples]` |
 | `npm run sim:pretrain` | Rebuilds the drivers in `public/drivers` | `[preset \| all] [generations] [population] [seed] [kept]` |
+| `npm run sim:season` | Whole championship seasons with a fixed player, for balance | `[team] [rounds] [sprint \| full] [seed] [seasons] [risk] [qualifying blocks]` |
 
 Pass arguments after `--`, for example `npm run sim:lap -- 4 50 0.2`. Presets are numbered
 0 to 4: Pinewood Short, Copperline Oval, Harbour Streets, Vento Ring, Kestrel Park.

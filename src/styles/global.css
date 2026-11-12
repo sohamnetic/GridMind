@@ -257,9 +257,31 @@ a {
 
 .topbar-end {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   flex: none;
   min-width: 70px;
+}
+
+.season-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-inset);
+  color: var(--warn);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.season-link:hover,
+.season-link.is-active {
+  border-color: var(--warn);
+  background: rgba(255, 194, 71, 0.12);
 }
 
 .coach-toggle {
@@ -465,8 +487,17 @@ a {
 
   .brand-name,
   .step-icon,
-  .topbar-end:empty {
+  .topbar-end:empty,
+  .season-link span {
     display: none !important;
+  }
+
+  .topbar-end {
+    min-width: 0;
+  }
+
+  .season-link {
+    padding: 7px 9px;
   }
 
   .steps {

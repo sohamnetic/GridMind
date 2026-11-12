@@ -1,6 +1,5 @@
 import { deriveSeed } from '../math/rng'
-import { createRace, stepLap, type CarOrder, type RaceSetup, type SafetyCar, type Stint } from '../race/engine'
-import { raceParams } from '../race/strategy'
+import { carParams, createRace, stepLap, type CarOrder, type RaceSetup, type SafetyCar, type Stint } from '../race/engine'
 import { callOptions, chooseCall, evaluateCall, optionOf, type CallValue } from './rollout'
 import { decisionPoints, playerOf, pulseOf, workingPlan, type DecisionType } from './session'
 
@@ -58,7 +57,7 @@ export function reviewLaps(
   onLap: (lap: number) => void = () => {},
 ): CallReview[] {
   const driver = playerOf(setup)
-  const params = raceParams(setup.profile, setup.laps)
+  const params = carParams(setup, driver)
   const wanted = new Set(laps)
   const lastLap = laps.reduce((m, l) => Math.max(m, l), 0)
   const race = createRace(setup)

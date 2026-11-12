@@ -53,6 +53,64 @@ export interface RaceSetup {
   record?: boolean
   /** Multiplier on retirements and safety cars (default 1). */
   incidents?: number
+  /**
+   * The starting order, driver indices from pole back, as decided by a
+   * qualifying session run elsewhere. Without it the grid comes from a short
+   * qualifying drawn from the seed.
+   */
+  grid?: number[]
+  /** How each car differs from the standard one, by driver index: development and the weekend's set-up. */
+  tuning?: CarTuning[]
+}
+
+/** One car's differences from the standard car. */
+export interface CarTuning {
+  /** Added to the car's pace, as a fraction of a lap: negative is quicker. */
+  pace: number
+  /** Multiplier on tyre wear. */
+  wear: number
+  /** Seconds added to the time stationary in the box: negative is quicker. */
+  stationary: number
+  /** Multiplier on the chance of a slow stop. */
+  slowStop: number
+  /** Multiplier on the chance of retiring. */
+  risk: number
+}
+
+export const STANDARD_TUNING: CarTuning = { pace: 0, wear: 1, stationary: 0, slowStop: 1, risk: 1 }
+
+/**
+ * The race constants as one car sees them: its own tyre wear and its own
+ * pit crew. Planning for a car has to use these, or the plan is for a
+ * different car.
+ */
+export function carParams(setup: RaceSetup, driver: number): RaceParams {
+  const base = raceParams(setup.profile, setup.laps)
+  const tuning = setup.tuning?.[driver]
+  if (!tuning) return base
+  return { ...base, tyreStress: base.tyreStress * tuning.wear, stationary: base.stationary + tuning.stationary }
+}
+
+const tunedParams = new WeakMap<CarTuning[], { profile: TrackProfile; laps: number; list: RaceParams[] }>()
+
+/** carParams for every car, worked out once per set-up: null when the field is standard. */
+function fieldParams(setup: RaceSetup): RaceParams[] | null {
+  const tuning = setup.tuning
+  if (!tuning) return null
+  const cached = tunedParams.get(tuning)
+  if (cached && cached.profile === setup.profile && cached.laps === setup.laps) return cached.list
+  const list = Array.from({ length: Math.min(setup.cars, DRIVERS.length) }, (_, i) => carParams(setup, i))
+  tunedParams.set(tuning, { profile: setup.profile, laps: setup.laps, list })
+  return list
+}
+
+/** Whether `grid` names every one of the first `count` drivers exactly once. */
+function validGrid(grid: readonly number[] | undefined, count: number): grid is number[] {
+  if (!grid || grid.length !== count) return false
+  const seen = new Set(grid)
+  if (seen.size !== count) return false
+  for (const d of grid) if (!Number.isInteger(d) || d < 0 || d >= count) return false
+  return true
 }
 
 export type SafetyCar = 'none' | 'vsc' | 'sc'
@@ -173,7 +231,8 @@ const INCIDENT_LAP = 5000
 /** Lap-time fraction lost by the slowest team's car to the fastest. */
 const TEAM_SPREAD = 0.22
 
-function carPace(driver: number): number {
+/** Lap time of a standard car and its driver, as a fraction above the quickest car's. */
+export function carPace(driver: number): number {
   const team = TEAMS[DRIVERS[driver].team]
   // A fixed, small driver-to-driver difference: up to about 0.2 % either way.
   const skill = (((driver * 37) % 11) - 5) * 0.0004
@@ -190,8 +249,10 @@ export function createRace(setup: RaceSetup): RaceState {
   // Qualifying: pace plus a little luck decides the grid.
   const quali = Array.from({ length: count }, (_, i) => ({ i, t: carPace(i) + nextGaussian(rng, 0, 0.0015) }))
   quali.sort((a, b) => a.t - b.t)
+  // A grid decided elsewhere replaces that one; the numbers are drawn all the same, so the race's luck does not move.
+  const order = validGrid(setup.grid, count) ? setup.grid.slice() : quali.map((q) => q.i)
   const grid = new Array<number>(count)
-  quali.forEach((q, slot) => (grid[q.i] = slot + 1))
+  order.forEach((driver, slot) => (grid[driver] = slot + 1))
 
   const startType = bestForConditions(weather.wetness)
   const cars: CarRace[] = []
@@ -233,7 +294,7 @@ export function createRace(setup: RaceSetup): RaceState {
       lastLap: 0,
       bestLap: Infinity,
       penalty: 0,
-      pace: carPace(i),
+      pace: carPace(i) + (setup.tuning?.[i]?.pace ?? 0),
       nerve: nextRange(rng, -1, 1),
       lapTimes: [],
       positions: record ? [grid[i]] : [],
@@ -246,7 +307,7 @@ export function createRace(setup: RaceSetup): RaceState {
     lap: 0,
     totalLaps: setup.laps,
     cars,
-    order: quali.map((q) => q.i),
+    order,
     rng,
     incidentSeed: deriveSeed(setup.seed, 7919),
     weather,
@@ -392,6 +453,8 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
   const record = setup.record !== false
   const incidents = setup.incidents ?? 1
   const manual = setup.manual ?? []
+  const tuning = setup.tuning
+  const own = fieldParams(setup)
   const log = (entry: Omit<RaceLog, 'lap'>) => state.log.push({ lap: lapNo, ...entry })
 
   // --- Weather for this lap ---
@@ -421,7 +484,7 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
     let risk = (0.0018 + 0.0018 * wetness + (mismatch > 3 ? 0.02 : 0) + (car.wear > 1.15 ? 0.016 : 0)) * distance
     if (lapNo === 1) risk += 0.006
     if (safety !== 'none') risk *= 0.2
-    if (roll < risk * incidents) {
+    if (roll < risk * incidents * (tuning?.[i]?.risk ?? 1)) {
       car.running = false
       car.outLap = lapNo
       log({ type: 'out', car: i })
@@ -453,7 +516,7 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
       if (order?.mode) car.mode = order.mode
       if (order?.pit) pit = order.pit
     } else {
-      pit = aiPitCall(car, state, params)
+      pit = aiPitCall(car, state, own ? own[i] : params)
     }
 
     let lap = idealLap(car, wetness, params) + nextGaussian(rng, 0, 0.22 * params.scale)
@@ -462,8 +525,8 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
 
     let pitTime = 0
     if (pit) {
-      let stationary = Math.max(1.9, nextGaussian(rng, params.stationary, 0.35))
-      if (nextFloat(rng) < 0.04) {
+      let stationary = Math.max(1.6, nextGaussian(rng, own ? own[i].stationary : params.stationary, 0.35))
+      if (nextFloat(rng) < 0.04 * (tuning?.[i]?.slowStop ?? 1)) {
         stationary += nextRange(rng, 3, 9)
         log({ type: 'slowstop', car: i, value: stationary })
       }
@@ -503,7 +566,8 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
     lap = cross - car.time
 
     // --- The car's own state after the lap ---
-    car.wear += wearPerLap(car.compound, params.tyreStress, car.mode, car.fuel / params.fuelStart, wetness) * speedFactor
+    const stress = own ? own[i].tyreStress : params.tyreStress
+    car.wear += wearPerLap(car.compound, stress, car.mode, car.fuel / params.fuelStart, wetness) * speedFactor
     car.fuel = Math.max(0, car.fuel - params.fuelPerLap * (safety === 'sc' ? 0.5 : safety === 'vsc' ? 0.7 : 1))
     car.tyreAge++
     car.time = cross

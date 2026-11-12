@@ -1,6 +1,6 @@
 import { createRng, deriveSeed, nextFloat } from '../math/rng'
-import { cloneRace, stepLap, stripHistory, type RaceSetup, type RaceState } from '../race/engine'
-import { raceParams, type PitStop } from '../race/strategy'
+import { carParams, cloneRace, stepLap, stripHistory, type RaceSetup, type RaceState } from '../race/engine'
+import type { PitStop } from '../race/strategy'
 import { COMPOUNDS, wearPerLap, type Compound, type DriveMode } from '../race/tyres'
 import { rerollWeather } from '../race/weather'
 import { planFrom } from './replan'
@@ -89,7 +89,7 @@ export function evaluateCall(
   samples: number,
   seed: number,
 ): CallValue[] {
-  const params = raceParams(setup.profile, setup.laps)
+  const params = carParams(setup, driver)
   const base = stripHistory(state)
   const me = base.cars[driver]
   const manual: RaceSetup = { ...setup, manual: [driver], record: false }
