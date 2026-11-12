@@ -18,9 +18,11 @@ browser: there is no server, no account and no paid service behind it.
 | 4 | Strategy Optimiser | Thousands of simulated races rank the pit strategies for one car. |
 | 5 | Live Pit Wall | You make the calls during a race; the debrief rates each one against the strategy engine. |
 
-The **Guide** button in the top bar lists the five steps and what is done for the circuit
-that is open; the button next to it goes to the next one. The five preset circuits come
-with drivers already trained, so every module works on them straight away.
+The home page offers the five preset circuits, which come with drivers already trained,
+so every module works on them straight away. On every screen a **coach strip** under the
+top bar says what to do there, makes the button it is talking about glow, and offers the
+next step once the screen's job is done. The top bar ticks off the steps done for the
+circuit that is open.
 
 ## How it is built
 
@@ -62,7 +64,7 @@ src/
   workers/       training, racing, Monte Carlo pool, pit-wall advice and debrief
   render/        canvas drawing of tracks and cars
   state/         zustand stores, saving to the browser
-  ui/            React screens, one folder per module
+  ui/            React screens: home, the app shell and coach, one folder per module
 scripts/         headless runs of the same core code
 tests/           Vitest
 public/drivers/  pre-trained drivers for the preset circuits

@@ -139,7 +139,7 @@ export function CarPanel({ race, driver, params, pending, advice }: CarPanelProp
       </div>
 
       <h3 className="pw-sub">Pit call for lap {lapNo}</h3>
-      <div className="pw-box" role="group" aria-label="Tyres to stop for at the end of this lap">
+      <div className="pw-box" role="group" aria-label="Tyres to stop for at the end of this lap" data-coach="pit-call">
         {ALL_COMPOUNDS.map((c) => (
           <button
             key={c}

@@ -1,6 +1,6 @@
 .evolution {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 368px;
   height: 100%;
   min-height: 0;
 }
@@ -217,4 +217,90 @@
 
 .button-link:hover {
   border-color: var(--text-faint);
+}
+
+/* ---------- Night-race theme ---------- */
+
+.field select,
+.field input[type='number'] {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.live-readout {
+  left: 14px;
+  top: 14px;
+  padding: 7px 16px;
+  border-color: var(--line-strong);
+  border-radius: 999px;
+  background: rgba(8, 11, 18, 0.86);
+  font-size: 13.5px;
+  backdrop-filter: blur(6px);
+}
+
+.live-readout strong {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.ghost-key {
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: rgba(8, 11, 18, 0.86);
+  backdrop-filter: blur(6px);
+}
+
+.segmented {
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.panel .segmented button {
+  min-height: 32px;
+  background: transparent;
+}
+
+.panel .segmented button.is-active {
+  background: var(--accent-soft);
+  color: #ffd9cf;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.stage-switch {
+  flex: none;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+}
+
+.stage-switch button {
+  padding: 8px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.stage-switch button.is-active {
+  background: var(--bg-card-hi);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.saved-driver {
+  font-size: 13px;
+}
+
+.button-link {
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+  background: #1a2233;
+  font-weight: 600;
+}
+
+.chart {
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
 }

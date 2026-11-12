@@ -1,34 +1,43 @@
 :root {
-  /* Surfaces */
-  --bg: #0b0e14;
-  --bg-raised: #121722;
-  --bg-inset: #080a0f;
-  --line: #222a3a;
-  --line-strong: #33405a;
+  /* Surfaces: a night race. Deep blue-black, with cards a step lighter. */
+  --bg: #080b12;
+  --bg-raised: #0e131e;
+  --bg-card: #141b2a;
+  --bg-card-hi: #1b2437;
+  --bg-inset: #070a10;
+  --line: #1f283a;
+  --line-strong: #33415c;
 
   /* Text */
-  --text: #e9edf5;
-  --text-dim: #9aa6bd;
-  --text-faint: #66728a;
+  --text: #f1f4fa;
+  --text-dim: #a9b3c8;
+  --text-faint: #717d95;
 
   /* Signal colours */
   --accent: #ff5a36;
+  --accent-2: #ff2e63;
   --accent-soft: rgba(255, 90, 54, 0.14);
+  --accent-grad: linear-gradient(135deg, #ff8a3d 0%, #ff5a36 45%, #ff2e63 100%);
+  --on-accent: #1d0a05;
   --good: #3ddc97;
   --warn: #ffc247;
   --info: #4aa8ff;
 
-  /* Tyre compounds (used from Phase 4 on) */
+  /* Tyre compounds */
   --tyre-soft: #ff4d4d;
   --tyre-medium: #ffd23f;
   --tyre-hard: #f1f3f7;
   --tyre-inter: #3ddc97;
   --tyre-wet: #4aa8ff;
 
-  --radius: 8px;
-  --topbar-h: 56px;
+  --radius-sm: 7px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --glow: 0 6px 22px rgba(255, 78, 60, 0.38);
+  --topbar-h: 60px;
 
-  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-ui: 'Titillium Web', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Liberation Mono', monospace;
 
   color-scheme: dark;
@@ -48,17 +57,27 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 560px at 88% -12%, rgba(255, 90, 54, 0.1), transparent 62%),
+    radial-gradient(900px 520px at -8% 108%, rgba(74, 168, 255, 0.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-button {
+button,
+input,
+select {
   font: inherit;
   color: inherit;
+}
+
+a {
+  color: var(--info);
 }
 
 :focus-visible {
@@ -66,11 +85,21 @@ button {
   outline-offset: 2px;
 }
 
+::selection {
+  background: rgba(255, 90, 54, 0.4);
+}
+
+/* Slim scrollbars that sit quietly on dark panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
 /* ---------- App shell ---------- */
 
 .app {
-  display: grid;
-  grid-template-rows: var(--topbar-h) 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
 }
@@ -78,9 +107,11 @@ button {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 16px;
-  background: var(--bg-raised);
+  gap: 20px;
+  flex: none;
+  height: var(--topbar-h);
+  padding: 0 18px;
+  background: linear-gradient(180deg, rgba(20, 27, 42, 0.96), rgba(12, 16, 26, 0.96));
   border-bottom: 1px solid var(--line);
   min-width: 0;
 }
@@ -88,15 +119,14 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  flex: none;
   color: var(--accent);
   text-decoration: none;
-  flex: none;
 }
 
 .brand-mark {
-  width: 26px;
-  height: 26px;
+  filter: drop-shadow(0 0 8px rgba(255, 90, 54, 0.55));
 }
 
 .brand-dot {
@@ -105,228 +135,325 @@ button {
 
 .brand-name {
   color: var(--text);
+  font-size: 21px;
+  font-style: italic;
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
-.pipeline {
+.brand-name b {
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 700;
+  padding-right: 0.1em;
+}
+
+/* The five modules as a line of steps. */
+.steps {
   display: flex;
-  align-items: stretch;
-  gap: 2px;
+  align-items: center;
+  gap: 16px;
   height: 100%;
   min-width: 0;
+  margin: 0 auto;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.pipeline::-webkit-scrollbar {
+.steps::-webkit-scrollbar {
   display: none;
 }
 
-.pipeline-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.pipeline-step:hover {
-  color: var(--text);
-}
-
-.pipeline-step.is-active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-
-.pipeline-num {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--bg-inset);
-  border: 1px solid var(--line-strong);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-.pipeline-step.is-active .pipeline-num {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #14080a;
-  font-weight: 700;
-}
-
-.workspace {
-  min-height: 0;
-  overflow: auto;
-}
-
-/* ---------- Guided flow ---------- */
-
-.pipeline-step.is-done .pipeline-num {
-  border-color: var(--good);
-  color: var(--good);
-}
-
-.pipeline-step.is-done.is-active .pipeline-num {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #14080a;
-}
-
-.guide {
+.step {
   position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  margin-left: auto;
-}
-
-.guide-next,
-.guide-toggle {
-  padding: 6px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--bg-inset);
-  color: var(--text);
+  height: 38px;
+  padding: 0 14px 0 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-dim);
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.guide-next {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: #ffd9cf;
-  font-weight: 600;
-}
-
-.guide-next:hover,
-.guide-toggle:hover {
-  border-color: var(--text-dim);
-}
-
-.guide-panel {
+/* The link between one step and the next. */
+.step + .step::before {
+  content: '';
   position: absolute;
-  top: calc(100% + 12px);
-  right: 0;
-  z-index: 20;
-  width: min(420px, calc(100vw - 24px));
-  padding: 16px 18px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  left: -14px;
+  top: 50%;
+  width: 11px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
 }
 
-.guide-panel h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
+.step.is-done + .step::before {
+  background: var(--good);
 }
 
-.guide-panel p {
-  margin: 0 0 10px;
-  color: var(--text-dim);
-  font-size: 13px;
+.step:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.guide-panel ol {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.guide-panel li button {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 10px;
-  width: 100%;
-  padding: 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.guide-panel li button:hover {
+.step.is-active {
   border-color: var(--line-strong);
-  background: var(--bg-inset);
+  background: var(--bg-card-hi);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-.guide-panel li.is-next button {
-  border-color: var(--accent);
-}
-
-.guide-mark {
+.step-chip {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--line-strong);
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--line-strong);
   border-radius: 50%;
-  color: var(--text-dim);
+  background: var(--bg-inset);
   font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 700;
 }
 
-.guide-panel li.is-done .guide-mark {
+.step.is-done .step-chip {
   border-color: var(--good);
   color: var(--good);
 }
 
-.guide-panel li strong {
-  display: block;
-  font-weight: 600;
+.step.is-next .step-chip {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 90, 54, 0.18);
 }
 
-.guide-panel li small {
-  display: block;
-  color: var(--text-dim);
-  font-size: 12px;
-  line-height: 1.35;
+.step.is-active .step-chip {
+  border-color: transparent;
+  background: var(--accent-grad);
+  color: var(--on-accent);
 }
 
-.guide-foot {
+.step-icon {
+  display: none;
+  color: var(--accent);
+}
+
+.step.is-active .step-icon {
+  display: grid;
+}
+
+.topbar-end {
   display: flex;
   justify-content: flex-end;
-  margin-top: 10px;
+  flex: none;
+  min-width: 70px;
 }
 
-.guide-foot button {
-  padding: 5px 14px;
+.coach-toggle {
+  padding: 6px 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--bg-inset);
+  color: var(--text-dim);
+  font-weight: 600;
   cursor: pointer;
 }
 
+.coach-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ---------- Coach strip ---------- */
+
+.coach {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, rgba(255, 90, 54, 0.2), rgba(255, 46, 99, 0.07) 38%, transparent 72%),
+    var(--bg-raised);
+}
+
+.coach.is-done {
+  background:
+    linear-gradient(90deg, rgba(61, 220, 151, 0.16), rgba(61, 220, 151, 0.04) 38%, transparent 72%),
+    var(--bg-raised);
+}
+
+.coach-step {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 12px 4px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: #ffd9cf;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.coach.is-done .coach-step {
+  border-color: var(--good);
+  color: #c9f7e2;
+}
+
+.coach-step b {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.coach-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.coach-body strong {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.coach-body span {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.coach-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coach-actions button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.coach-actions button:hover {
+  border-color: var(--text-dim);
+}
+
+.coach-actions .coach-next {
+  border: 0;
+  background: var(--accent-grad);
+  color: var(--on-accent);
+  font-weight: 700;
+  box-shadow: var(--glow);
+}
+
+.coach-actions .coach-next:hover {
+  filter: brightness(1.08);
+}
+
+.coach-actions .coach-hide {
+  width: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* The control the coach is talking about. */
+.coach-target {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent),
+    0 0 24px 6px rgba(255, 90, 54, 0.5) !important;
+  animation: coach-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes coach-pulse {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--accent-2),
+      0 0 34px 12px rgba(255, 46, 99, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-target {
+    animation: none;
+  }
+}
+
+/* ---------- Narrow screens ---------- */
+
 /* The top bar gives up words before it gives up steps. */
-@media (max-width: 1240px) {
+@media (max-width: 1180px) {
   .topbar {
     gap: 12px;
   }
 
-  .brand-name,
-  .guide-next-what {
+  .steps {
+    gap: 12px;
+  }
+
+  .step:not(.is-active) .step-name {
     display: none;
+  }
+
+  .step:not(.is-active) {
+    padding: 0 7px;
+  }
+
+  .step + .step::before {
+    left: -11px;
+    width: 9px;
   }
 }
 
-@media (max-width: 900px) {
-  .pipeline-step:not(.is-active) .pipeline-label {
-    display: none;
+@media (max-width: 760px) {
+  .coach {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .coach-step {
+    justify-self: start;
+  }
+
+  .coach-actions {
+    flex-wrap: wrap;
   }
 }
 
@@ -336,12 +463,23 @@ button {
     padding: 0 10px;
   }
 
-  .pipeline-step {
-    gap: 6px;
-    padding: 0 3px;
+  .brand-name,
+  .step-icon,
+  .topbar-end:empty {
+    display: none !important;
   }
 
-  .guide-next {
-    display: none;
+  .steps {
+    gap: 9px;
+    margin: 0;
+  }
+
+  .step + .step::before {
+    left: -8px;
+    width: 7px;
+  }
+
+  .step.is-active {
+    padding-right: 10px;
   }
 }

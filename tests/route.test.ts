@@ -13,9 +13,14 @@ describe('parseRoute', () => {
     expect(parseRoute('#/race?seed=4')).toBe('race')
   })
 
-  it('falls back to the studio for empty or unknown hashes', () => {
-    expect(parseRoute('')).toBe('studio')
-    expect(parseRoute('#/')).toBe('studio')
-    expect(parseRoute('#/nope')).toBe('studio')
+  it('falls back to the home page for empty or unknown hashes', () => {
+    expect(parseRoute('')).toBe('home')
+    expect(parseRoute('#/')).toBe('home')
+    expect(parseRoute('#/home')).toBe('home')
+    expect(parseRoute('#/nope')).toBe('home')
+  })
+
+  it('keeps a shared circuit link on the studio', () => {
+    expect(parseRoute('#/studio?track=zabc')).toBe('studio')
   })
 })

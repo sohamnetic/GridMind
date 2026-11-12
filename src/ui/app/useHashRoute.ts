@@ -1,15 +1,18 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { DEFAULT_MODULE, isModuleId, type ModuleId } from './modules'
+import { isModuleId, type ModuleId } from './modules'
+
+/** A screen of the app: the home page or one of the five modules. */
+export type Route = ModuleId | 'home'
 
 /**
- * Hash-based routing (`#/studio`, `#/pitwall`, ...).
+ * Hash-based routing (`#/home`, `#/studio`, `#/pitwall`, ...).
  *
  * GitHub Pages serves static files only, so path-based routes would 404 on
  * refresh. The hash never reaches the server, which keeps deep links working.
  */
-export function parseRoute(hash: string): ModuleId {
+export function parseRoute(hash: string): Route {
   const segment = hash.replace(/^#\/?/, '').split(/[/?]/)[0] ?? ''
-  return isModuleId(segment) ? segment : DEFAULT_MODULE
+  return isModuleId(segment) ? segment : 'home'
 }
 
 function subscribe(onChange: () => void): () => void {
@@ -21,10 +24,10 @@ function getSnapshot(): string {
   return window.location.hash
 }
 
-export function useHashRoute(): [ModuleId, (id: ModuleId) => void] {
+export function useHashRoute(): [Route, (route: Route) => void] {
   const hash = useSyncExternalStore(subscribe, getSnapshot)
-  const navigate = useCallback((id: ModuleId) => {
-    window.location.hash = `/${id}`
+  const navigate = useCallback((route: Route) => {
+    window.location.hash = `/${route}`
   }, [])
   return [parseRoute(hash), navigate]
 }

@@ -215,6 +215,7 @@ export function DriverEvolution() {
                     type="button"
                     className="primary"
                     disabled={!studioDrivable || racecraftRunning}
+                    data-coach="start-training"
                     onClick={() => void actions.start(studioDef, 'fresh')}
                   >
                     Start training
@@ -231,6 +232,7 @@ export function DriverEvolution() {
                         <button
                           type="button"
                           disabled={!studioDrivable}
+                          data-coach="continue-training"
                           onClick={() => void actions.start(studioDef, 'saved')}
                         >
                           Continue

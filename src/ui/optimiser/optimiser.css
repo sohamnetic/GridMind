@@ -242,3 +242,34 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* ---------- Night-race theme ---------- */
+
+.opt-table {
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+}
+
+.opt-ranking {
+  font-size: 13px;
+}
+
+.opt-progress-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.opt-progress-fill {
+  border-radius: 4px;
+  background: var(--accent-grad);
+}
+
+.opt-tip {
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hi);
+  font-size: 13px;
+}
+
+.opt-note {
+  font-size: 13px;
+}

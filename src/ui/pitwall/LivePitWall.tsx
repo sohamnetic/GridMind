@@ -172,7 +172,7 @@ export function LivePitWall() {
           <section className="panel">
             <h2>Race over</h2>
             {error && <p className="issue issue-error">{error}</p>}
-            <button type="button" className="primary" onClick={actions.leave}>
+            <button type="button" className="primary" data-coach="new-race" onClick={actions.leave}>
               New race
             </button>
           </section>
@@ -227,7 +227,7 @@ export function LivePitWall() {
                   <li key={d.type}>{d.text}</li>
                 ))}
               </ul>
-              <div className="pw-decision-buttons">
+              <div className="pw-decision-buttons" data-coach="decision">
                 {suggestion && (
                   <button
                     type="button"
@@ -359,6 +359,7 @@ export function LivePitWall() {
                 type="button"
                 className="primary"
                 disabled={!profile || !scene.drivable || !scene.track || !chosen}
+                data-coach="go-grid"
                 onClick={() => {
                   if (!profile || !scene.track || !chosen) return
                   actions.start(profile, laps, { id: def.id, name: def.name }, chosen.strategy, lapPath(scene.track, line))
@@ -386,6 +387,7 @@ export function LivePitWall() {
               <button
                 type="button"
                 className={playing ? 'primary is-stop' : 'primary'}
+                data-coach="lights-out"
                 onClick={playing ? actions.pause : actions.play}
               >
                 {playing ? 'Stop the clock' : race.lap === 0 ? 'Lights out' : 'Resume'}

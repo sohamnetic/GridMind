@@ -175,6 +175,7 @@ export function StrategyOptimiser() {
               type="button"
               className="primary"
               disabled={!ready}
+              data-coach="run-optimiser"
               onClick={() => profile && actions.run(profile, laps, { id: def.id, name: def.name })}
             >
               Find the best strategy

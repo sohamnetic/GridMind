@@ -138,6 +138,7 @@ export function FullRace() {
             type="button"
             className="primary"
             disabled={!profile || !scene.drivable}
+            data-coach="run-race"
             onClick={() => profile && actions.run(profile, laps, { id: def.id, name: def.name })}
           >
             Run race

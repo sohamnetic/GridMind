@@ -1,20 +1,26 @@
 import { useEffect } from 'react'
 import { decodeTrack, sharedTrackParam } from '../../share/urlCodec'
 import { useStudioStore } from '../../state/studioStore'
-import { flowSteps } from './flow'
-import { FlowGuide, useFlowStatus } from './FlowGuide'
-import { MODULES } from './modules'
 import { DriverEvolution } from '../evolution/DriverEvolution'
+import { Home } from '../home/Home'
 import { StrategyOptimiser } from '../optimiser/StrategyOptimiser'
 import { LivePitWall } from '../pitwall/LivePitWall'
 import { RaceScreen } from '../race/RaceScreen'
 import { TrackStudio } from '../studio/TrackStudio'
+import { Coach, useCoachPreference } from './CoachStrip'
+import { flowSteps, nextStep } from './flow'
+import { BrandMark, ModuleIcon } from './icons'
+import { MODULES } from './modules'
+import { useDrivers, useFlowStatus } from './useFlowStatus'
 import { useHashRoute } from './useHashRoute'
 
 export function App() {
   const [active, navigate] = useHashRoute()
-  const status = useFlowStatus()
+  const drivers = useDrivers()
+  const status = useFlowStatus(drivers)
+  const [coachOn, setCoachOn] = useCoachPreference()
   const done = new Set(flowSteps(status).filter((s) => s.done).map((s) => s.id))
+  const next = nextStep(status).id
 
   // A shared link carries a circuit after the route: open it in the studio.
   useEffect(() => {
@@ -56,43 +62,59 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <a className="brand" href="#/studio" aria-label="GridMind home">
-          <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-            <path
-              d="M9 21c-3-5 0-12 7-12s10 6 7 10-6 1-8 3-4 2-6-1z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.6"
-              strokeLinejoin="round"
-            />
-            <circle cx="22.5" cy="12" r="2.2" className="brand-dot" />
-          </svg>
-          <span className="brand-name">GridMind</span>
+        <a className="brand" href="#/home" aria-label="GridMind home" aria-current={active === 'home' ? 'page' : undefined}>
+          <BrandMark />
+          <span className="brand-name">
+            Grid<b>Mind</b>
+          </span>
         </a>
 
-        <nav className="pipeline" aria-label="Modules">
-          {MODULES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={['pipeline-step', m.id === active ? 'is-active' : '', done.has(m.id) ? 'is-done' : '']
-                .join(' ')
-                .trim()}
-              title={done.has(m.id) ? `${m.name}: done for this circuit` : m.name}
-              aria-current={m.id === active ? 'page' : undefined}
-              onClick={() => navigate(m.id)}
-            >
-              <span className="pipeline-num">{m.step}</span>
-              <span className="pipeline-label">{m.name}</span>
-            </button>
-          ))}
+        <nav className="steps" aria-label="Modules">
+          {MODULES.map((m) => {
+            const isDone = done.has(m.id)
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className={[
+                  'step',
+                  m.id === active ? 'is-active' : '',
+                  isDone ? 'is-done' : '',
+                  m.id === next && !isDone ? 'is-next' : '',
+                ]
+                  .join(' ')
+                  .trim()}
+                title={isDone ? `${m.name}: done for this circuit` : m.name}
+                aria-current={m.id === active ? 'page' : undefined}
+                onClick={() => navigate(m.id)}
+              >
+                <span className="step-chip">{isDone ? '✓' : m.step}</span>
+                <span className="step-icon">
+                  <ModuleIcon id={m.id} size={16} />
+                </span>
+                <span className="step-name">{m.name}</span>
+              </button>
+            )
+          })}
         </nav>
 
-        <FlowGuide active={active} status={status} navigate={navigate} />
+        <div className="topbar-end">
+          {!coachOn && active !== 'home' && (
+            <button type="button" className="coach-toggle" onClick={() => setCoachOn(true)} title="Show what to do on this screen">
+              Coach
+            </button>
+          )}
+        </div>
       </header>
 
-      <main className="workspace">
-        {active === 'studio' ? (
+      {coachOn && (
+        <Coach route={active} status={status} drivers={drivers} navigate={navigate} onHide={() => setCoachOn(false)} />
+      )}
+
+      <main className={active === 'home' ? 'workspace is-home' : 'workspace'}>
+        {active === 'home' ? (
+          <Home status={status} navigate={navigate} />
+        ) : active === 'studio' ? (
           <TrackStudio />
         ) : active === 'evolution' ? (
           <DriverEvolution />

@@ -2,7 +2,7 @@
 
 .pitwall {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 404px;
   height: 100%;
   min-height: 0;
 }
@@ -478,4 +478,114 @@
   .pw-radio-list {
     max-height: 220px;
   }
+}
+
+/* ---------- Night-race theme ---------- */
+
+.pw-card {
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.pw-card h3,
+.panel .pw-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.pw-card h3::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--accent-grad);
+}
+
+.pw-radio-list {
+  font-size: 13.5px;
+}
+
+.pw-voice {
+  font-weight: 700;
+}
+
+.pitwall-intro {
+  padding: 22px 28px 26px;
+}
+
+.pitwall-intro h1 {
+  font-size: 30px;
+  font-style: italic;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pitwall-intro p {
+  font-size: 15.5px;
+}
+
+.pw-decision {
+  border-width: 2px;
+  border-radius: var(--radius-lg);
+  background: rgba(14, 19, 30, 0.97);
+  box-shadow:
+    var(--shadow),
+    0 0 0 6px rgba(255, 194, 71, 0.12);
+}
+
+.pw-decision h3 {
+  font-size: 13px;
+}
+
+.pw-decision ul {
+  font-size: 15.5px;
+}
+
+.pw-decision-buttons {
+  border-radius: var(--radius);
+}
+
+.pw-decision-buttons button {
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+.pw-decision-buttons button.primary {
+  border: 0;
+  background: var(--accent-grad);
+  color: var(--on-accent);
+  box-shadow: var(--glow);
+}
+
+.pw-call {
+  font-size: 13px;
+}
+
+.pw-wear-head {
+  font-size: 12.5px;
+}
+
+.pw-versus > div {
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--bg-card-hi), var(--bg-card));
+}
+
+.pw-versus b {
+  font-size: 34px;
+  font-style: italic;
+}
+
+.pw-verdict {
+  font-weight: 600;
+}
+
+.pw-note {
+  font-size: 13px;
 }

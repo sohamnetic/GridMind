@@ -124,7 +124,7 @@ export function LibraryPanel() {
         )}
 
         <h3>Preset circuits</h3>
-        <ul className="track-list">
+        <ul className="track-list" data-coach="presets">
           {presets.map((track) => (
             <li key={track.id}>
               <button
