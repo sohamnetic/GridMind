@@ -173,3 +173,15 @@
     border-radius: var(--radius);
   }
 }
+
+.share-link {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-inset);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

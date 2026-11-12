@@ -8,6 +8,11 @@ export type StudioTool = 'edit' | 'draw' | 'start' | 'sector1' | 'sector2' | 'dr
 
 const HISTORY_LIMIT = 100
 
+export interface StudioNotice {
+  kind: 'ok' | 'error'
+  text: string
+}
+
 interface StudioState {
   def: TrackDef
   selected: number | null
@@ -17,7 +22,10 @@ interface StudioState {
   saved: TrackDef[]
   /** Bumped whenever a different track is loaded, so the view can re-fit. */
   loadCount: number
+  /** Outcome of the last library action (save, import, share), shown in the library panel. */
+  notice: StudioNotice | null
 
+  setNotice: (notice: StudioNotice | null) => void
   setTool: (tool: StudioTool) => void
   select: (index: number | null) => void
   /**
@@ -46,7 +54,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   future: [],
   saved: [],
   loadCount: 0,
+  notice: null,
 
+  setNotice: (notice) => set({ notice }),
   setTool: (tool) => set({ tool }),
   select: (selected) => set({ selected }),
 

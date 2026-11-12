@@ -3,31 +3,91 @@
 **AI Circuit Lab & Pit Wall Strategy Simulator** — design a circuit, watch AI drivers
 learn it, then call the race from the pit wall.
 
+Live: https://sohamnetic.github.io/GridMind/
+
 GridMind uses a fictional championship, teams and drivers. It runs entirely in the
 browser: there is no server, no account and no paid service behind it.
 
-## Modules
+## What you do with it
 
-| # | Module | Role |
+| # | Module | What it does |
 |---|---|---|
-| 1 | Track Studio | Draw and edit the circuit; pit lane, DRS zones, sectors |
-| 2 | Driver Evolution | Train AI drivers on the circuit with a genetic algorithm |
-| 3 | Race Engine | Simulate a full race with tyres, fuel and incidents |
-| 4 | Strategy Optimiser | Monte Carlo evaluation of candidate strategies |
-| 5 | Live Pit Wall | Play strategist during a race, then review the debrief |
+| 1 | Track Studio | Draw and edit a circuit: pit lane, DRS zones, sectors. Test-drive it with the keyboard. Share it as a link. |
+| 2 | Driver Evolution | AI drivers learn the circuit by neuroevolution, first alone, then racing each other. |
+| 3 | Race Engine | A full race for twenty cars, lap by lap: tyres, fuel, pit stops, safety cars, weather. Also wheel-to-wheel races between the trained drivers. |
+| 4 | Strategy Optimiser | Thousands of simulated races rank the pit strategies for one car. |
+| 5 | Live Pit Wall | You make the calls during a race; the debrief rates each one against the strategy engine. |
 
-## Status
+The **Guide** button in the top bar lists the five steps and what is done for the circuit
+that is open; the button next to it goes to the next one. The five preset circuits come
+with drivers already trained, so every module works on them straight away.
 
-| Phase | Scope | State |
+## How it is built
+
+### One rule
+
+Everything under `src/core` is pure, deterministic TypeScript with no DOM in it, and all
+of its randomness comes from one seeded generator (`core/math/rng.ts`). The same code runs
+on the page, in Web Workers, in the unit tests and in the Node scripts, and a seed always
+gives the same training run or race.
+
+### Two levels of simulation
+
+| | Physics level | Lap level |
 |---|---|---|
-| 0 | Scaffold, app shell, GitHub Pages pipeline | Done |
-| 1 | Track Studio, track geometry, car physics, test drive | Done |
-| 2 | Sensors, neural network, genetic algorithm, training view | Done |
-| 3 | Multi-car racing, slipstream, traffic training, track profile | Done |
-| 4 | Lap-level race engine: tyres, fuel, pit stops, safety car, weather | Done |
-| 5 | Monte Carlo strategy optimiser: staged search, worker pool, pit-window maps | Done |
-| 6 | Live Pit Wall: lap-by-lap race with pit calls, team radio, weather radar and a rollout-based debrief | Done |
-| 7 | Polish, calibration, sharing | Next |
+| Used for | Test drive, driver training, wheel-to-wheel races | Full races, the optimiser, the pit wall |
+| Unit of time | 1/60 s | One lap |
+| A car is | A bicycle-model car with tyres, downforce and drag, driven by a neural network | A handful of numbers: pace, tyre wear, fuel, position |
+| Cost | Thousands of steps a second | About a millisecond for a 50-lap, 20-car race |
+
+The **track profile** (`core/profile/trackProfile.ts`) is the bridge. It turns a circuit and
+the best trained lap into what the lap-level engine needs: base lap time, tyre stress,
+pit-lane time loss, overtaking difficulty.
+
+### The parts
+
+```
+src/
+  core/
+    math/        seeded random numbers, small helpers
+    track/       spline, 2 m samples, analysis and validation, presets, pit lane, save format
+    physics/     car model, lap timer, slipstream, DRS and contact
+    ai/          neural network, sensors, genetic algorithm
+    evolution/   training alone, training in traffic, wheel-to-wheel races, driver files
+    profile/     track profile
+    race/        lap-level engine: tyres, weather, strategies, the grid of teams and drivers
+    strategy/    candidate strategies, Monte Carlo runs, statistics, staged search
+    pitwall/     re-planning mid-race, rollouts, decision points, team radio, debrief
+  share/         a circuit packed into a link
+  workers/       training, racing, Monte Carlo pool, pit-wall advice and debrief
+  render/        canvas drawing of tracks and cars
+  state/         zustand stores, saving to the browser
+  ui/            React screens, one folder per module
+scripts/         headless runs of the same core code
+tests/           Vitest
+public/drivers/  pre-trained drivers for the preset circuits
+```
+
+### Ideas worth knowing about
+
+- **Drivers** are small feed-forward networks (13 inputs, two hidden layers, steering and
+  throttle out) evolved by a genetic algorithm. A second stage adds eight traffic inputs,
+  with zero weights so the lap they already drive is unchanged, and trains them in heats.
+- **A race is a plain object**, random generator included. It can be copied at any lap and
+  continued along different futures. The optimiser and the debrief are both built on this.
+- **Comparisons are paired.** Every strategy in an optimiser study meets the same grids,
+  weather and safety cars race for race, so differences come from the strategy and not
+  from luck. Retirements and safety cars are drawn from their own per-lap stream so they
+  stay the same when one car changes its plan.
+- **The optimiser searches in stages**: every candidate gets a short first round, the
+  leaders are re-raced on races none of them has seen, and the pit window is mapped last.
+- **The debrief has no hindsight.** Each call is judged by playing the race out many
+  times from that lap, once for each option. The weather in those futures follows the
+  forecast for a few laps and is rolled afresh beyond it.
+- **Workers share nothing.** They exchange messages and hand typed arrays over, because
+  GitHub Pages cannot send the headers that shared memory needs.
+- **Share links carry the circuit itself**, compressed, after the `#`. That part of an
+  address never leaves the browser, so nothing is uploaded.
 
 ## Develop
 
@@ -39,20 +99,26 @@ npm run dev        # dev server with hot reload
 npm test           # unit tests (Vitest)
 npm run lint       # ESLint
 npm run build      # type-check + production build into dist/
-npm run sim:train  # headless training: -- [preset index | all] [generations] [population] [seed]
-npm run sim:race   # headless racecraft: -- [preset index] [solo generations] [traffic generations] [seed]
-npm run sim:lap    # headless lap-level races: -- [preset index] [laps] [rain chance] [seed] [races]
-npm run sim:optimise # headless strategy study: -- [preset index] [laps] [rain chance] [driver] [final runs] [seed]
-npm run sim:pitwall  # headless pit-wall race and debrief: -- [preset index] [laps] [rain chance] [driver] [seed] [samples]
 npm run preview    # serve the production build locally
 ```
 
-## Layout
+Headless runs of the simulation, for calibration and checking:
 
-- `src/core` — pure, deterministic, DOM-free simulation code (seeded RNG). Runs
-  unchanged on the main thread, in Web Workers, in tests and in Node scripts.
-- `src/ui` — React interface. `src/render` — Canvas drawing. `src/workers` — Web Workers.
-- `tests` — Vitest unit tests. `scripts` — headless training / calibration runs.
+| Command | What it runs | Arguments |
+|---|---|---|
+| `npm run sim:train` | Driver training | `[preset \| all] [generations] [population] [seed]` |
+| `npm run sim:race` | Racecraft training and a wheel-to-wheel race | `[preset] [solo generations] [traffic generations] [seed]` |
+| `npm run sim:lap` | Lap-level races and their averages | `[preset] [laps] [rain chance] [seed] [races]` |
+| `npm run sim:optimise` | A strategy study, run twice to compare | `[preset] [laps] [rain chance] [driver] [final runs] [seed]` |
+| `npm run sim:pitwall` | A pit-wall race, its radio and its debrief | `[preset] [laps] [rain chance] [driver] [seed] [samples]` |
+| `npm run sim:pretrain` | Rebuilds the drivers in `public/drivers` | `[preset \| all] [generations] [population] [seed] [kept]` |
+
+Pass arguments after `--`, for example `npm run sim:lap -- 4 50 0.2`. Presets are numbered
+0 to 4: Pinewood Short, Copperline Oval, Harbour Streets, Vento Ring, Kestrel Park.
+
+The pre-trained drivers depend on the presets and the car physics exactly as they were
+when the drivers were trained. If either changes, `tests/drivers.test.ts` fails; run
+`npm run sim:pretrain` to make the files again.
 
 ## Deploy (free, no card)
 
@@ -60,7 +126,9 @@ Hosting is GitHub Pages, built by GitHub Actions — both free for public reposi
 
 1. Create a **public** repository on github.com and push this project to its `main` branch.
 2. In the repository: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. Every push to `main` runs `.github/workflows/deploy.yml` and publishes `dist/`.
+3. Every push to `main` runs `.github/workflows/deploy.yml` (lint, tests, build) and
+   publishes `dist/`.
 
 The build uses relative asset paths and hash-based routes (`#/studio`), so it works under
-any `username.github.io/<repo>/` path with no extra configuration.
+any `username.github.io/<repo>/` path with no extra configuration. The page makes no
+requests to anywhere but its own address.

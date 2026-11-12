@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { encodeTrack, shareUrl } from '../../share/urlCodec'
 import { createPresets } from '../../core/track/presets'
 import { newTrackId, parseTrack, trackToJson } from '../../core/track/serialize'
 import type { TrackDef } from '../../core/track/types'
@@ -16,7 +17,10 @@ export function LibraryPanel() {
   const deleteSaved = useStudioStore((s) => s.deleteSaved)
   const presets = useMemo(() => createPresets(), [])
   const fileInput = useRef<HTMLInputElement>(null)
-  const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const status = useStudioStore((s) => s.notice)
+  const setStatus = useStudioStore((s) => s.setNotice)
+  /** The share link, shown for copying by hand when the clipboard is not available. */
+  const [link, setLink] = useState<string | null>(null)
 
   const isSaved = saved.some((t) => t.id === def.id)
 
@@ -33,6 +37,18 @@ export function LibraryPanel() {
   const save = async () => {
     await saveCurrent()
     setStatus({ kind: 'ok', text: 'Saved in this browser.' })
+  }
+
+  const share = async () => {
+    const url = shareUrl(window.location.href, await encodeTrack(def))
+    try {
+      await navigator.clipboard.writeText(url)
+      setLink(null)
+      setStatus({ kind: 'ok', text: 'Link copied. Whoever opens it gets their own copy of this circuit.' })
+    } catch {
+      setLink(url)
+      setStatus({ kind: 'ok', text: 'Copy this link. Whoever opens it gets their own copy of this circuit.' })
+    }
   }
 
   const importFile = async (file: File) => {
@@ -70,6 +86,26 @@ export function LibraryPanel() {
             Import
           </button>
         </div>
+        <div className="button-row">
+          <button
+            type="button"
+            disabled={def.points.length < 3}
+            title="Copies a link that contains this circuit. Nothing is uploaded: the circuit is in the link itself."
+            onClick={() => void share()}
+          >
+            Copy share link
+          </button>
+        </div>
+        {link && (
+          <input
+            className="share-link"
+            type="text"
+            readOnly
+            value={link}
+            aria-label="Share link"
+            onFocus={(e) => e.target.select()}
+          />
+        )}
         <input
           ref={fileInput}
           type="file"
