@@ -13,7 +13,7 @@ import {
   startQualifying,
   THROUGH,
 } from '../../core/season/qualifying'
-import { currentRound, heatFactor, roundProfile } from '../../core/season/season'
+import { currentRound, heatFactor, roundProfile, teamMate } from '../../core/season/season'
 import { PRACTICE_BLOCKS, planBlocks, setupGains } from '../../core/season/setup'
 import type { LongRun, PracticePlan, QualiSegment, Risk, Season } from '../../core/season/types'
 import { buildTrack } from '../../core/track/build'
@@ -542,6 +542,7 @@ export function RaceCard({ season, navigate }: { season: Season; navigate: (rout
   const event = usePitWallStore((s) => s.event)
   const phase = usePitWallStore((s) => s.phase)
   const [planIndex, setPlanIndex] = useState(0)
+  const [matePlanIndex, setMatePlanIndex] = useState(0)
 
   const params = useMemo(() => playerParams(season), [season])
   const plans = useMemo(() => rankStrategies(params).slice(0, 6), [params])
@@ -562,6 +563,15 @@ export function RaceCard({ season, navigate }: { season: Season; navigate: (rout
   const quali = season.qualifying
   const position = quali ? gridPosition(quali, season.driver) : 0
   const chosen = plans[Math.min(planIndex, plans.length - 1)]
+  const mate = teamMate(season)
+  const mateChosen = plans[Math.min(matePlanIndex, plans.length - 1)]
+  const matePosition = quali ? gridPosition(quali, mate) : 0
+  const planOptions = plans.map((p, i) => (
+    <option key={p.label + i} value={i}>
+      {describePlan(p.strategy)}
+      {i === 0 ? ' (quickest on a clear track)' : ` (+${(p.time - plans[0].time).toFixed(1)} s)`}
+    </option>
+  ))
   const onPitWall = event !== null && event.season === season.seed && event.round === season.round && phase === 'race'
 
   return (
@@ -582,23 +592,31 @@ export function RaceCard({ season, navigate }: { season: Season; navigate: (rout
         <>
           <p className="season-note">
             {DRIVERS[season.driver].name} starts <strong>{position > 0 ? ordinal(position) : 'on the grid'}</strong> of
-            twenty, over {currentRound(season).laps} laps. The plans below are worked out for this weekend’s temperature
-            and your car’s tyre wear.
+            twenty
+            {season.bothCars && matePosition > 0 ? `, ${DRIVERS[mate].name} ${ordinal(matePosition)}` : ''}, over{' '}
+            {currentRound(season).laps} laps. The plans below are worked out for this weekend’s temperature and your
+            car’s tyre wear.
           </p>
           <label className="plan-field">
-            <span>Starting plan</span>
+            <span>{season.bothCars ? `Starting plan for ${DRIVERS[season.driver].name}` : 'Starting plan'}</span>
             <select
               value={Math.min(planIndex, plans.length - 1)}
               onChange={(e) => setPlanIndex(Number(e.target.value))}
             >
-              {plans.map((p, i) => (
-                <option key={p.label + i} value={i}>
-                  {describePlan(p.strategy)}
-                  {i === 0 ? ' (quickest on a clear track)' : ` (+${(p.time - plans[0].time).toFixed(1)} s)`}
-                </option>
-              ))}
+              {planOptions}
             </select>
           </label>
+          {season.bothCars && (
+            <label className="plan-field">
+              <span>Starting plan for {DRIVERS[mate].name}</span>
+              <select
+                value={Math.min(matePlanIndex, plans.length - 1)}
+                onChange={(e) => setMatePlanIndex(Number(e.target.value))}
+              >
+                {planOptions}
+              </select>
+            </label>
+          )}
           {error && <p className="season-error">{error}</p>}
           <div className="stage-actions">
             <button
@@ -608,7 +626,7 @@ export function RaceCard({ season, navigate }: { season: Season; navigate: (rout
               disabled={busy || !chosen}
               onClick={() => {
                 if (!chosen) return
-                void goToGrid(chosen.strategy).then((started) => {
+                void goToGrid(chosen.strategy, mateChosen?.strategy).then((started) => {
                   if (started) navigate('pitwall')
                 })
               }}
@@ -619,14 +637,15 @@ export function RaceCard({ season, navigate }: { season: Season; navigate: (rout
               type="button"
               className="cta cta-ghost"
               disabled={busy || !chosen}
-              onClick={() => chosen && simulate(chosen.strategy)}
+              onClick={() => chosen && simulate(chosen.strategy, mateChosen?.strategy)}
             >
               Let the engineer run it
             </button>
           </div>
           <p className="season-note stage-foot">
-            On the pit wall every stop is your call, and the debrief rates each one afterwards. The engineer follows the
-            plan and reacts to rain, safety cars and worn tyres, but will not out-think the field.
+            On the pit wall every stop is your call{season.bothCars ? ', for both cars' : ''}, and the debrief rates
+            each one afterwards. The engineer follows the plan and reacts to rain, safety cars and worn tyres, but will
+            not out-think the field.
           </p>
         </>
       )}

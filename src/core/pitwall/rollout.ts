@@ -1,5 +1,13 @@
 import { createRng, deriveSeed, nextFloat } from '../math/rng'
-import { carParams, cloneRace, stepLap, stripHistory, type RaceSetup, type RaceState } from '../race/engine'
+import {
+  carParams,
+  cloneRace,
+  stepLap,
+  stripHistory,
+  type CarOrder,
+  type RaceSetup,
+  type RaceState,
+} from '../race/engine'
 import type { PitStop } from '../race/strategy'
 import { COMPOUNDS, wearPerLap, type Compound, type DriveMode } from '../race/tyres'
 import { rerollWeather } from '../race/weather'
@@ -79,6 +87,7 @@ export function callOptions(state: RaceState, driver: number): CallOption[] {
  * is worth, in the order given.
  *
  * @param mode how the car is driven on the coming lap
+ * @param others what the player's other cars are told for the coming lap; after it, their own pit walls take over
  */
 export function evaluateCall(
   state: RaceState,
@@ -88,11 +97,15 @@ export function evaluateCall(
   options: readonly CallOption[],
   samples: number,
   seed: number,
+  others: Record<number, CarOrder> = {},
 ): CallValue[] {
   const params = carParams(setup, driver)
   const base = stripHistory(state)
   const me = base.cars[driver]
-  const manual: RaceSetup = { ...setup, manual: [driver], record: false }
+  const mates = Object.keys(others)
+    .map(Number)
+    .filter((d) => d !== driver)
+  const manual: RaceSetup = { ...setup, manual: [driver, ...mates], record: false }
   const auto: RaceSetup = { ...setup, manual: [], record: false }
 
   // The plan the engine follows after each option, from the car's state a lap from now.
@@ -126,7 +139,7 @@ export function evaluateCall(
       race.rng = createRng(s)
       race.incidentSeed = deriveSeed(s, 2)
       race.weather = { plan: weather.plan, rain: weather.rain, wetness: weather.wetness }
-      stepLap(race, manual, { [driver]: { pit: options[o].pit ?? undefined, mode } })
+      stepLap(race, manual, { ...others, [driver]: { pit: options[o].pit ?? undefined, mode } })
       const car = race.cars[driver]
       if (car.running) {
         car.plan = plans[o].map((stop) => ({ ...stop }))

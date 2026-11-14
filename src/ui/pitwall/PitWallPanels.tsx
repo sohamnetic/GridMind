@@ -203,9 +203,51 @@ export function CarPanel({ race, driver, params, pending, advice }: CarPanelProp
   )
 }
 
+// ---------- Which car ----------
+
+/** With two cars on the pit wall: a tab for each, showing where it is and what it is on. */
+export function CarSwitch({ race, cars, driver }: { race: RaceState; cars: readonly number[]; driver: number }) {
+  const pendings = usePitWallStore((s) => s.pendings)
+  const focus = usePitWallStore((s) => s.focus)
+  return (
+    <div className="pw-cars" role="tablist" aria-label="Which of your cars">
+      {cars.map((car) => {
+        const me = race.cars[car]
+        const who = DRIVERS[car]
+        return (
+          <button
+            key={car}
+            type="button"
+            role="tab"
+            aria-selected={car === driver}
+            className={car === driver ? 'pw-car-tab is-active' : 'pw-car-tab'}
+            onClick={() => focus(car)}
+          >
+            <span className="pw-car-code">
+              <span className="team-bar" style={{ background: TEAMS[who.team].color }} aria-hidden="true" />
+              {who.code}
+            </span>
+            {me.running ? (
+              <>
+                <span className="pw-car-place">P{me.position}</span>
+                <span className="pw-car-tyre">
+                  <Tyre compound={me.compound} age={me.tyreAge} />
+                </span>
+                {pendings[car]?.pit && <span className="pw-car-box">Box</span>}
+              </>
+            ) : (
+              <span className="pw-car-place">Out</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ---------- Timing tower ----------
 
-export function Tower({ race, driver }: { race: RaceState; driver: number }) {
+export function Tower({ race, driver, mate }: { race: RaceState; driver: number; mate?: number }) {
   const leader = race.cars[race.order[0]]
   return (
     <div className="table-scroll timing-scroll pw-tower">
@@ -230,7 +272,10 @@ export function Tower({ race, driver }: { race: RaceState; driver: number }) {
             return (
               <tr
                 key={i}
-                className={[car.running ? '' : 'is-out', i === driver ? 'is-selected' : ''].join(' ').trim() || undefined}
+                className={
+                  [car.running ? '' : 'is-out', i === driver ? 'is-selected' : i === mate ? 'is-mate' : ''].join(' ').trim() ||
+                  undefined
+                }
               >
                 <td className="num">{car.running ? p + 1 : '–'}</td>
                 <th scope="row" title={`${who.name}, ${TEAMS[who.team].name}`}>
@@ -386,7 +431,10 @@ export function Radio({ messages, limit = 40 }: { messages: readonly RadioMessag
           {recent.map((m, i) => (
             <li key={`${m.lap}-${i}-${m.text}`} className={`is-${m.voice} is-${m.tone}`}>
               <span className="num">L{m.lap}</span>
-              <span className="pw-voice">{VOICES[m.voice]}</span>
+              <span className="pw-voice">
+                {VOICES[m.voice]}
+                {m.car !== undefined && <b className="pw-voice-car"> {DRIVERS[m.car].code}</b>}
+              </span>
               <span>{m.text}</span>
             </li>
           ))}

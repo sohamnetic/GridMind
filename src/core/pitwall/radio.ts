@@ -18,6 +18,8 @@ export interface RadioMessage {
   voice: RadioVoice
   text: string
   tone: 'info' | 'good' | 'warn'
+  /** The car the message is about, when the pit wall runs more than one. */
+  car?: number
 }
 
 /** Most messages for one lap: the rest are dropped, least important first. */
@@ -89,8 +91,12 @@ export function radioFor(
     const slow = mine.find((e) => e.type === 'slowstop' && e.car === driver)
     const label = COMPOUNDS[pit.compound ?? me.compound].label
     const tyres = label.toLowerCase()
-    if (slow) say('engineer', 'warn', `Slow stop, sorry: ${(slow.value ?? 0).toFixed(1)} s in the box. ${label} tyres on, P${me.position}.`)
-    else say('engineer', 'good', pick([`Good stop. ${label} tyres on, you are P${me.position}.`, `Clean stop. P${me.position} on the ${tyres} tyre.`]))
+    const queued = mine.find((e) => e.type === 'stack' && e.car === driver)
+    if (queued) {
+      say('engineer', 'warn', `Held ${(queued.value ?? 0).toFixed(1)} s behind the other car in the box. ${label} tyres on, P${me.position}.`)
+    } else if (slow) {
+      say('engineer', 'warn', `Slow stop, sorry: ${(slow.value ?? 0).toFixed(1)} s in the box. ${label} tyres on, P${me.position}.`)
+    } else say('engineer', 'good', pick([`Good stop. ${label} tyres on, you are P${me.position}.`, `Clean stop. P${me.position} on the ${tyres} tyre.`]))
   }
 
   // --- Weather ---

@@ -19,13 +19,13 @@ import { buildTrackPaths } from '../../render/trackRenderer'
 import { loadDriver, trackKey } from '../../state/driverLibrary'
 import { defaultLaps, LAP_OPTIONS } from '../../state/fullRaceStore'
 import { useOptimiserStore } from '../../state/optimiserStore'
-import { PITWALL_SPEEDS, pitwallFrame, tickPitWall, usePitWallStore } from '../../state/pitwallStore'
+import { PITWALL_SPEEDS, pitwallFrame, teamMateOf, tickPitWall, usePitWallStore } from '../../state/pitwallStore'
 import { useStudioStore } from '../../state/studioStore'
 import { PopulationCanvas } from '../components/PopulationCanvas'
 import { useTrackProfile } from '../race/useTrackProfile'
 import { ProfileCard } from '../race/WheelRace'
 import { Debrief } from './Debrief'
-import { CarPanel, PitWindow, Radio, rainWord, Tower, WeatherPanel } from './PitWallPanels'
+import { CarPanel, CarSwitch, PitWindow, Radio, rainWord, Tower, WeatherPanel } from './PitWallPanels'
 import '../evolution/evolution.css'
 import '../race/race.css'
 import '../optimiser/optimiser.css'
@@ -57,6 +57,10 @@ function suggestedTyre(race: RaceState, driver: number, plan: Plan | null, param
   return plan?.stops[0]?.compound ?? null
 }
 
+function openSeason(): void {
+  window.location.hash = '/season'
+}
+
 /** The Live Pit Wall: run one car's race from the pit wall, lap by lap, then go through the debrief. */
 export function LivePitWall() {
   const studioDef = useStudioStore((s) => s.def)
@@ -67,6 +71,10 @@ export function LivePitWall() {
   const lapsChoice = usePitWallStore((s) => s.laps)
   const rainChance = usePitWallStore((s) => s.rainChance)
   const driver = usePitWallStore((s) => s.driver)
+  const bothCars = usePitWallStore((s) => s.bothCars)
+  const cars = usePitWallStore((s) => s.cars)
+  const pendings = usePitWallStore((s) => s.pendings)
+  const carPlans = usePitWallStore((s) => s.plans)
   const seed = usePitWallStore((s) => s.seed)
   const planIndex = usePitWallStore((s) => s.planIndex)
   const setup = usePitWallStore((s) => s.setup)
@@ -147,17 +155,26 @@ export function LivePitWall() {
   const exit = () => {
     const season = event !== null
     actions.leave()
-    if (season) window.location.hash = '/season'
+    if (season) openSeason()
   }
   const active = phase !== 'setup' && race !== null && setup !== null && params !== null
   const me = active ? race.cars[driver] : null
   const otherTrack = active && raceTrack !== null && raceTrack.id !== def.id
   const suggestion = active && me?.running ? suggestedTyre(race, driver, plan, params) : null
+  const team = cars.length > 1
+  const mate = team ? cars.find((car) => car !== driver) : undefined
 
   if (active && phase === 'finished') {
     return (
       <div className="fullrace">
-        <Debrief race={race} driver={driver} trackName={raceTrack?.name ?? def.name} debrief={debrief} />
+        <Debrief
+          race={race}
+          driver={driver}
+          cars={cars}
+          onCar={actions.focus}
+          trackName={raceTrack?.name ?? def.name}
+          debrief={debrief}
+        />
         <aside className="studio-side evolution-side" aria-label="Result and radio">
           <section className="panel">
             <h2>Race over</h2>
@@ -169,7 +186,7 @@ export function LivePitWall() {
           </section>
           <section className="panel">
             <h2>Result</h2>
-            <Tower race={race} driver={driver} />
+            <Tower race={race} driver={driver} mate={mate} />
           </section>
           <section className="panel">
             <Radio messages={radio} limit={200} />
@@ -215,33 +232,85 @@ export function LivePitWall() {
               <h3>Your call</h3>
               <ul>
                 {decisions.map((d) => (
-                  <li key={d.type}>{d.text}</li>
+                  <li key={`${d.type}-${d.car ?? 'all'}`}>
+                    {team && d.car !== null && <b>{DRIVERS[d.car].code}: </b>}
+                    {d.text}
+                  </li>
                 ))}
               </ul>
-              <div className="pw-decision-buttons" data-coach="decision">
-                {suggestion && (
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={() => {
-                      actions.setPit(suggestion)
-                      actions.play()
-                    }}
-                  >
-                    Box for {COMPOUNDS[suggestion].label.toLowerCase()}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    actions.setPit(null)
-                    actions.play()
-                  }}
-                >
-                  Stay out
-                </button>
-              </div>
-              <p className="muted">Other tyres and driving modes are in the panel on the right.</p>
+              {team ? (
+                <>
+                  <div className="pw-team-calls" data-coach="decision">
+                    {cars
+                      .filter((car) => race.cars[car].running)
+                      .map((car) => {
+                        const tyre = suggestedTyre(race, car, carPlans[car] ?? null, carParams(setup, car))
+                        const boxed = pendings[car]?.pit ?? null
+                        return (
+                          <div key={car} className="pw-team-call">
+                            <span className="pw-team-who">
+                              {DRIVERS[car].code} · P{race.cars[car].position}
+                            </span>
+                            {tyre && (
+                              <button
+                                type="button"
+                                className={boxed === tyre ? 'is-active' : undefined}
+                                aria-pressed={boxed === tyre}
+                                onClick={() => actions.setPit(tyre, car)}
+                              >
+                                Box for {COMPOUNDS[tyre].label.toLowerCase()}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={boxed === null ? 'is-active' : undefined}
+                              aria-pressed={boxed === null}
+                              onClick={() => actions.setPit(null, car)}
+                            >
+                              Stay out
+                            </button>
+                          </div>
+                        )
+                      })}
+                  </div>
+                  <div className="pw-decision-buttons">
+                    <button type="button" className="primary" onClick={actions.play}>
+                      Go
+                    </button>
+                  </div>
+                  <p className="muted">
+                    Stopping both cars on one lap makes the second one queue for the box. Other tyres and driving modes
+                    are in the panel on the right.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="pw-decision-buttons" data-coach="decision">
+                    {suggestion && (
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => {
+                          actions.setPit(suggestion)
+                          actions.play()
+                        }}
+                      >
+                        Box for {COMPOUNDS[suggestion].label.toLowerCase()}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        actions.setPit(null)
+                        actions.play()
+                      }}
+                    >
+                      Stay out
+                    </button>
+                  </div>
+                  <p className="muted">Other tyres and driving modes are in the panel on the right.</p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -258,7 +327,8 @@ export function LivePitWall() {
               <p>
                 Run one car’s race from the pit wall. The race plays out lap by lap and the clock stops when there is a
                 decision to make: a safety car, rain, tyres reaching the cliff, the pit window opening. You call the
-                stops and the pace; the other nineteen cars are run by their own pit walls.
+                stops and the pace; the other cars are run by their own pit walls. Tick “Run both cars” to take the
+                team-mate’s car as well.
               </p>
               <p className="muted">
                 After the flag the debrief replays every call against the strategy engine and shows what each one cost.
@@ -331,6 +401,14 @@ export function LivePitWall() {
                     value={rainChance}
                     onChange={(e) => actions.setOptions({ rainChance: Number(e.target.value) })}
                   />
+                </label>
+                <label className="check opt-wide">
+                  <input
+                    type="checkbox"
+                    checked={bothCars}
+                    onChange={(e) => actions.setOptions({ bothCars: e.target.checked })}
+                  />
+                  <span>Run both cars: {DRIVERS[teamMateOf(driver)].name} too</span>
                 </label>
                 <label className="field opt-wide">
                   <span>Starting plan</span>
@@ -420,7 +498,14 @@ export function LivePitWall() {
               </label>
             </section>
 
-            <CarPanel race={race} driver={driver} params={params} pending={pending} advice={advice} />
+            {team && <CarSwitch race={race} cars={cars} driver={driver} />}
+            <CarPanel
+              race={race}
+              driver={driver}
+              params={params}
+              pending={pending}
+              advice={advice && advice.car === driver ? advice : null}
+            />
 
             <section className="panel">
               <PitWindow race={race} driver={driver} plan={plan} />
@@ -428,7 +513,7 @@ export function LivePitWall() {
 
             <section className="panel">
               <h2>Timing</h2>
-              <Tower race={race} driver={driver} />
+              <Tower race={race} driver={driver} mate={mate} />
             </section>
           </>
         )}

@@ -49,6 +49,8 @@ export interface RaceSetup {
    * gives the same grid, weather and rival plans whatever the strategy is.
    */
   player?: { driver: number; strategy: Strategy }
+  /** A second car given an exact strategy in the same way: the player's team-mate, when both cars are run. */
+  mate?: { driver: number; strategy: Strategy }
   /** Keep per-lap history for charts (default true). Turn off for bulk simulation. */
   record?: boolean
   /** Multiplier on retirements and safety cars (default 1). */
@@ -173,6 +175,7 @@ export type RaceLogType =
   | 'out'
   | 'fastest'
   | 'slowstop'
+  | 'stack'
   | 'penalty'
   | 'flag'
 
@@ -222,6 +225,8 @@ const SC_LAP = 1.45
 const SC_CATCH_LAP = 1.2
 const VSC_LAP = 1.35
 const SC_GAP = 0.6
+/** Time a pit crew needs between sending one car away and being ready for its team-mate (s). */
+export const CREW_RESET = 1.2
 /** Time added at the flag for not running two dry compounds in a dry race (s). */
 export const RULE_PENALTY = 30
 
@@ -270,8 +275,9 @@ export function createRace(setup: RaceSetup): RaceState {
       }
     }
     // The player's car draws the same numbers as it would have, then takes its own plan as written.
-    if (setup.player?.driver === i) {
-      plan = setup.player.strategy
+    const given = setup.player?.driver === i ? setup.player : setup.mate?.driver === i ? setup.mate : null
+    if (given) {
+      plan = given.strategy
       stops = plan.stops.map((s) => ({ ...s }))
     }
     const compound: Compound = startType === 'dry' ? (plan?.start ?? 'medium') : startType
@@ -500,6 +506,9 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
   // --- Lap times, in running order ---
   const speedFactor = safety === 'sc' ? 0.4 : safety === 'vsc' ? 0.6 : 1
   const need = (0.5 + 3 * params.overtakingDifficulty) * (lapNo === 1 ? 0.6 : 1)
+  // A team has one pit box. A car that arrives while its team-mate is still
+  // being serviced waits behind it: the price of stopping both on one lap.
+  let boxFree: Map<number, number> | null = null
   let blockCross = -Infinity // crossing time of the car directly ahead on the road
   let blockLap = 0 // that car's lap time this lap
   let blockCar = -1
@@ -524,8 +533,9 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
     if (lapNo === 1) lap += 4 * params.scale + (car.grid - 1) * 0.18 // standing start, from further back
 
     let pitTime = 0
+    let stationary = 0
     if (pit) {
-      let stationary = Math.max(1.6, nextGaussian(rng, own ? own[i].stationary : params.stationary, 0.35))
+      stationary = Math.max(1.6, nextGaussian(rng, own ? own[i].stationary : params.stationary, 0.35))
       if (nextFloat(rng) < 0.04 * (tuning?.[i]?.slowStop ?? 1)) {
         stationary += nextRange(rng, 3, 9)
         log({ type: 'slowstop', car: i, value: stationary })
@@ -533,6 +543,15 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
       // The pit lane costs far less while the field is circulating slowly.
       const lane = params.pitLoss * (safety === 'sc' ? 0.45 : safety === 'vsc' ? 0.6 : 1)
       pitTime = lane + stationary
+    }
+    /** Time spent queueing for the box behind a team-mate, for a car reaching the pits at `arrive`. */
+    const queue = (arrive: number): number => {
+      const team = DRIVERS[i].team
+      boxFree ??= new Map()
+      const wait = Math.max(0, (boxFree.get(team) ?? -Infinity) - arrive)
+      boxFree.set(team, arrive + wait + stationary + CREW_RESET)
+      if (wait > 0.05) log({ type: 'stack', car: i, value: wait })
+      return wait
     }
 
     let cross: number
@@ -542,11 +561,15 @@ export function stepLap(state: RaceState, setup: RaceSetup, orders: Record<numbe
       const pace = blockCross === -Infinity ? SC_LAP : SC_CATCH_LAP
       cross = car.time + Math.max(params.baseLap * pace, lap * 0.9)
       if (blockCross !== -Infinity) cross = Math.max(cross, blockCross + SC_GAP)
+      if (pit) pitTime += queue(cross)
       cross += pitTime
     } else if (safety === 'vsc') {
-      cross = car.time + Math.max(lap, params.baseLap * VSC_LAP) + pitTime
+      cross = car.time + Math.max(lap, params.baseLap * VSC_LAP)
+      if (pit) pitTime += queue(cross)
+      cross += pitTime
       if (!pit && blockCross !== -Infinity) cross = Math.max(cross, blockCross + MIN_GAP)
     } else {
+      if (pit) pitTime += queue(car.time + lap)
       cross = car.time + lap + pitTime
       if (!pit && cross < blockCross + MIN_GAP) {
         // Caught the car ahead: a pass needs a real pace advantage, more on a tight circuit.

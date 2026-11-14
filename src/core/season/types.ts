@@ -135,6 +135,8 @@ export interface Season {
   /** The player's team (index into TEAMS) and the car the player runs (index into DRIVERS). */
   team: number
   driver: number
+  /** The player calls the race for the team-mate's car too. */
+  bothCars?: boolean
   rounds: Round[]
   /** Index of the round in progress. */
   round: number

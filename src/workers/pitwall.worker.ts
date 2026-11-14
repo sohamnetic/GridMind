@@ -19,7 +19,7 @@ scope.onmessage = (e: MessageEvent<PitWallRequest>) => {
   const { id, setup } = message
   if (message.type === 'advise') {
     const driver = playerOf(setup)
-    const race = replay(setup, message.orders)
+    const race = replay(setup, message.orders, message.others)
     const values = evaluateCall(
       race,
       setup,
@@ -28,13 +28,21 @@ scope.onmessage = (e: MessageEvent<PitWallRequest>) => {
       callOptions(race, driver),
       message.samples,
       deriveSeed(setup.seed ^ 0xad71ce, race.lap),
+      message.coming,
     )
     post({ type: 'advice', id, lap: race.lap + 1, values, best: chooseCall(values).id })
   } else if (message.type === 'review') {
-    const reviews = reviewLaps(setup, message.orders, message.laps, message.samples, () => post({ type: 'progress', id }))
+    const reviews = reviewLaps(
+      setup,
+      message.orders,
+      message.laps,
+      message.samples,
+      () => post({ type: 'progress', id }),
+      message.others,
+    )
     post({ type: 'reviews', id, reviews })
   } else {
-    const run = enginePlay(setup, message.samples, () => post({ type: 'progress', id }))
+    const run = enginePlay(setup, message.samples, () => post({ type: 'progress', id }), message.others)
     post({ type: 'engine', id, run })
   }
 }

@@ -134,6 +134,8 @@ export interface SeasonOptions {
   team: number
   /** Which of the team's two cars the player runs: 0 or 1. */
   seat: number
+  /** Whether the player runs the other car in the races as well. */
+  bothCars?: boolean
   circuits: readonly CircuitSpec[]
   rounds: number
   distance: Distance
@@ -146,6 +148,7 @@ export function createSeason(options: SeasonOptions): Season {
     seed: options.seed,
     team,
     driver: team * 2 + (options.seat === 1 ? 1 : 0),
+    bothCars: options.bothCars === true,
     rounds: buildCalendar(options.circuits, options.seed, options.rounds, options.distance),
     round: 0,
     stage: 'practice',
@@ -222,8 +225,13 @@ export function raceTuning(season: Season): CarTuning[] {
 
 // ---------- The race ----------
 
-/** This round's race, with the player's car taking its orders from the pit wall. */
-export function raceSetup(season: Season, strategy: Strategy): RaceSetup {
+/**
+ * This round's race, with the player's car taking its orders from the pit
+ * wall, and the team-mate's too in a season where the player runs both.
+ *
+ * @param mateStrategy the plan the team-mate starts on (default: the same as the player's)
+ */
+export function raceSetup(season: Season, strategy: Strategy, mateStrategy: Strategy = strategy): RaceSetup {
   const round = currentRound(season)
   return sessionSetup({
     profile: roundProfile(round),
@@ -232,14 +240,15 @@ export function raceSetup(season: Season, strategy: Strategy): RaceSetup {
     rainChance: round.rainChance,
     driver: season.driver,
     strategy,
+    mate: season.bothCars ? { driver: teamMate(season), strategy: mateStrategy } : undefined,
     grid: season.qualifying?.grid ?? undefined,
     tuning: raceTuning(season),
   })
 }
 
 /** The same race left to the engineer: the car starts on the plan and its own pit wall makes the calls. */
-export function simulateRace(season: Season, strategy: Strategy): RaceState {
-  return runRace({ ...raceSetup(season, strategy), manual: [] })
+export function simulateRace(season: Season, strategy: Strategy, mateStrategy: Strategy = strategy): RaceState {
+  return runRace({ ...raceSetup(season, strategy, mateStrategy), manual: [] })
 }
 
 /** Points for a finished race, by driver index. */

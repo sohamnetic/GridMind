@@ -8,3 +8,6 @@ coverage/
 Thumbs.db
 scripts/.cache/
 .claude/
+
+# TypeScript incremental build state
+*.tsbuildinfo

@@ -1,7 +1,7 @@
 import { deriveSeed } from '../math/rng'
 import { carParams, createRace, stepLap, type CarOrder, type RaceSetup, type SafetyCar, type Stint } from '../race/engine'
 import { callOptions, chooseCall, evaluateCall, optionOf, type CallValue } from './rollout'
-import { decisionPoints, playerOf, pulseOf, workingPlan, type DecisionType } from './session'
+import { decisionPoints, playerOf, pulseOf, workingPlan, type DecisionType, type LapOrders } from './session'
 
 /**
  * The debrief: every call the player made, judged against what the strategy
@@ -48,6 +48,7 @@ export function verdictOf(loss: number): Verdict {
  *
  * @param orders the player's order for every lap of the race, in order
  * @param laps which laps to review (1-based); the race is replayed up to the last of them
+ * @param others the orders given to the player's other cars, lap by lap
  */
 export function reviewLaps(
   setup: RaceSetup,
@@ -55,6 +56,7 @@ export function reviewLaps(
   laps: readonly number[],
   samples: number,
   onLap: (lap: number) => void = () => {},
+  others: readonly LapOrders[] = [],
 ): CallReview[] {
   const driver = playerOf(setup)
   const params = carParams(setup, driver)
@@ -74,7 +76,16 @@ export function reviewLaps(
       const chosen = optionOf(order.pit)
       if (!options.some((o) => o.id === chosen.id)) options.push(chosen)
       if (options.length > 1) {
-        const values = evaluateCall(race, setup, driver, order.mode ?? me.mode, options, samples, reviewSeed(setup, lap))
+        const values = evaluateCall(
+          race,
+          setup,
+          driver,
+          order.mode ?? me.mode,
+          options,
+          samples,
+          reviewSeed(setup, lap),
+          others[lap - 1],
+        )
         const best = chooseCall(values)
         const mine = values.find((v) => v.id === chosen.id) ?? best
         const same = mine.id === best.id
@@ -96,7 +107,7 @@ export function reviewLaps(
       onLap(lap)
     }
     pulse = pulseOf(race, driver, plan)
-    stepLap(race, setup, { [driver]: order })
+    stepLap(race, setup, { ...others[lap - 1], [driver]: order })
   }
   return reviews
 }
@@ -114,9 +125,15 @@ export interface EngineRun {
 /**
  * The strategy engine's own run of the same race: the same grid, weather,
  * safety cars and luck, with the engine making every call by rollouts. It
- * sees no more of the future than the player did.
+ * sees no more of the future than the player did. The player's other cars
+ * do what the player told them to.
  */
-export function enginePlay(setup: RaceSetup, samples: number, onLap: (lap: number) => void = () => {}): EngineRun {
+export function enginePlay(
+  setup: RaceSetup,
+  samples: number,
+  onLap: (lap: number) => void = () => {},
+  others: readonly LapOrders[] = [],
+): EngineRun {
   const driver = playerOf(setup)
   const race = createRace(setup)
   const orders: CarOrder[] = []
@@ -126,13 +143,22 @@ export function enginePlay(setup: RaceSetup, samples: number, onLap: (lap: numbe
     if (me.running) {
       const options = callOptions(race, driver)
       if (options.length > 1) {
-        const values = evaluateCall(race, setup, driver, 'normal', options, samples, reviewSeed(setup, race.lap + 1))
+        const values = evaluateCall(
+          race,
+          setup,
+          driver,
+          'normal',
+          options,
+          samples,
+          reviewSeed(setup, race.lap + 1),
+          others[race.lap],
+        )
         const best = chooseCall(values)
         if (best.pit) order = { pit: best.pit }
       }
     }
     orders.push(order)
-    stepLap(race, setup, { [driver]: order })
+    stepLap(race, setup, { ...others[race.lap], [driver]: order })
     onLap(race.lap)
   }
   const me = race.cars[driver]

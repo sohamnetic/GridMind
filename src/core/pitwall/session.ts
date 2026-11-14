@@ -28,6 +28,8 @@ export interface PitWallConfig {
   driver: number
   /** The plan the player starts with: it sets the starting tyres. */
   strategy: Strategy
+  /** A second car run by the player, with the plan it starts on: the team-mate. */
+  mate?: { driver: number; strategy: Strategy }
   /** A grid from a qualifying session, driver indices from pole back. */
   grid?: number[]
   /** How each car differs from the standard one. */
@@ -42,8 +44,9 @@ export function sessionSetup(config: PitWallConfig): RaceSetup {
     rainChance: config.rainChance,
     cars: 20,
     plans: rankStrategies(raceParams(config.profile, config.laps)).map((r) => r.strategy),
-    manual: [config.driver],
+    manual: config.mate ? [config.driver, config.mate.driver] : [config.driver],
     player: { driver: config.driver, strategy: config.strategy },
+    ...(config.mate ? { mate: config.mate } : {}),
     ...(config.grid ? { grid: config.grid } : {}),
     ...(config.tuning ? { tuning: config.tuning } : {}),
   }
@@ -73,18 +76,50 @@ export function lapPath(track: BuiltTrack, ghost: Float32Array | null): Float32A
   return out
 }
 
-/** The player's car in a pit-wall setup. */
+/** The player's car in a pit-wall setup: the one whose calls are being made or judged. */
 export function playerOf(setup: RaceSetup): number {
   return setup.manual?.[0] ?? setup.player?.driver ?? 0
 }
 
-/** Rebuilds the race as it stood after the given orders, one per lap run. */
-export function replay(setup: RaceSetup, orders: readonly CarOrder[]): RaceState {
+/** Orders for one lap, by driver index: one entry for every car that takes orders. */
+export type LapOrders = Record<number, CarOrder>
+
+/**
+ * The same race seen from another of the cars that take orders: that car
+ * becomes the one whose calls are made or judged.
+ */
+export function setupFor(setup: RaceSetup, driver: number): RaceSetup {
+  const manual = setup.manual ?? []
+  if (manual[0] === driver || !manual.includes(driver)) return setup
+  return { ...setup, manual: [driver, ...manual.filter((d) => d !== driver)] }
+}
+
+/** One car's orders out of a race's whole history of them, and everybody else's. */
+export function splitOrders(
+  history: readonly LapOrders[],
+  driver: number,
+): { orders: CarOrder[]; others: LapOrders[] } {
+  const orders: CarOrder[] = []
+  const others: LapOrders[] = []
+  for (const lap of history) {
+    const { [driver]: own, ...rest } = lap
+    orders.push(own ?? {})
+    others.push(rest)
+  }
+  return { orders, others }
+}
+
+/**
+ * Rebuilds the race as it stood after the given orders, one per lap run.
+ *
+ * @param others the orders of the other cars the player runs, lap by lap
+ */
+export function replay(setup: RaceSetup, orders: readonly CarOrder[], others: readonly LapOrders[] = []): RaceState {
   const driver = playerOf(setup)
   const race = createRace(setup)
-  for (const order of orders) {
+  for (let k = 0; k < orders.length; k++) {
     if (race.finished) break
-    stepLap(race, setup, { [driver]: order })
+    stepLap(race, setup, { ...others[k], [driver]: orders[k] })
   }
   return race
 }

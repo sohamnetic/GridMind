@@ -82,12 +82,15 @@ function callRuns(reviews: readonly CallReview[]): CallRun[] {
 interface Props {
   race: RaceState
   driver: number
+  /** The cars the player ran. With two, the debrief can be switched between them. */
+  cars?: readonly number[]
+  onCar?: (car: number) => void
   trackName: string
   debrief: DebriefState
 }
 
 /** After the flag: the result, the engine's run of the same race, and every call that mattered. */
-export function Debrief({ race, driver, trackName, debrief }: Props) {
+export function Debrief({ race, driver, cars = [], onCar, trackName, debrief }: Props) {
   const me = race.cars[driver]
   const who = DRIVERS[driver]
   const { reviews, engine } = debrief
@@ -123,6 +126,25 @@ export function Debrief({ race, driver, trackName, debrief }: Props) {
           {me.running ? ` and finished P${me.position}` : ''} on {stintText(me.stints) || 'no laps'}.
           {me.penalty > 0 ? ` Includes a ${me.penalty} s penalty for using only one dry compound.` : ''}
         </p>
+        {cars.length > 1 && (
+          <div className="pw-cars pw-debrief-cars" role="tablist" aria-label="Whose calls to review">
+            {cars.map((car) => (
+              <button
+                key={car}
+                type="button"
+                role="tab"
+                aria-selected={car === driver}
+                className={car === driver ? 'pw-car-tab is-active' : 'pw-car-tab'}
+                onClick={() => onCar?.(car)}
+              >
+                <span className="pw-car-code">{DRIVERS[car].name}</span>
+                <span className="pw-car-place">
+                  {race.cars[car].running ? `P${race.cars[car].position}` : 'Retired'}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {debrief.status === 'running' && (

@@ -589,3 +589,113 @@
 .pw-note {
   font-size: 13px;
 }
+
+/* ---------- Two cars on the pit wall ---------- */
+
+.pw-cars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pw-car-tab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 46px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pw-car-tab:hover {
+  border-color: var(--text-dim);
+}
+
+.pw-car-tab.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.pw-car-code {
+  font-weight: 700;
+}
+
+.pw-car-place {
+  font-family: var(--font-mono);
+}
+
+.pw-car-box {
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pw-debrief-cars {
+  max-width: 460px;
+  margin-top: 12px;
+}
+
+.pw-voice-car {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.timing tr.is-mate th,
+.timing tr.is-mate td {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.pw-team-calls {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pw-team-call {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.pw-team-who {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pw-team-call button {
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pw-team-call button:only-of-type {
+  grid-column: 2 / -1;
+}
+
+.pw-team-call button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #ffd9cf;
+}

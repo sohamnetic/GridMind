@@ -16,7 +16,7 @@ browser: there is no server, no account and no paid service behind it.
 | 2 | Driver Evolution | AI drivers learn the circuit by neuroevolution, first alone, then racing each other. |
 | 3 | Race Engine | A full race for twenty cars, lap by lap: tyres, fuel, pit stops, safety cars, weather. Also wheel-to-wheel races between the trained drivers. |
 | 4 | Strategy Optimiser | Thousands of simulated races rank the pit strategies for one car. |
-| 5 | Live Pit Wall | You make the calls during a race; the debrief rates each one against the strategy engine. |
+| 5 | Live Pit Wall | You make the calls during a race, for one car or for both cars of a team; the debrief rates each one against the strategy engine. |
 
 ### Championship season
 
@@ -29,6 +29,7 @@ weekend:
 2. **Qualifying.** Three knockout parts (20 cars, then 15, then 10), two runs in each. You
    choose how hard the driver pushes on every run: quicker laps against ruined ones.
 3. **The race.** On the Live Pit Wall, from your qualifying slot, or left to the engineer.
+   A season can be set up so that you call the race for both of the team's cars.
 
 Points go into the drivers' and teams' tables. Prize money buys development in four areas
 (aerodynamics, tyre care, pit crew, reliability), while the other teams find pace of their
@@ -108,6 +109,10 @@ public/drivers/  pre-trained drivers for the preset circuits
   season's seed, so the same choices always give the same season. The race itself is the
   ordinary race engine, given the qualifying grid and a list of how each car differs from
   the standard one.
+- **A team has one pit box.** Two team-mates stopping on the same lap arrive one after
+  the other, and the second waits until the first has gone and the crew has turned round.
+  It applies to every team, so a safety car that brings a whole team in costs its second
+  car a few seconds.
 - **Workers share nothing.** They exchange messages and hand typed arrays over, because
   GitHub Pages cannot send the headers that shared memory needs.
 - **Share links carry the circuit itself**, compressed, after the `#`. That part of an

@@ -15,6 +15,7 @@ import {
   recordRace,
   roundProfile,
   simulateRace,
+  teamMate,
   type Distance,
 } from '../core/season/season'
 import {
@@ -44,6 +45,8 @@ export interface NewSeason {
   rounds: number
   distance: Distance
   seed: number
+  /** Run both of the team's cars from the pit wall. */
+  bothCars: boolean
   /** The player's own circuits to add to the calendar after the presets. */
   extra: TrackDef[]
 }
@@ -63,9 +66,9 @@ interface SeasonStore {
   qualify: (risks?: [Risk, Risk]) => void
   finishQualifying: () => void
   /** Puts this round's race on the pit wall. Resolves to false if it could not start. */
-  goToGrid: (strategy: Strategy) => Promise<boolean>
+  goToGrid: (strategy: Strategy, mateStrategy?: Strategy) => Promise<boolean>
   /** Lets the engineer run this round's race, and enters the result. */
-  simulate: (strategy: Strategy) => void
+  simulate: (strategy: Strategy, mateStrategy?: Strategy) => void
   buy: (area: Area) => void
   next: () => void
 }
@@ -139,6 +142,7 @@ export const useSeasonStore = create<SeasonStore>((set, get) => {
             seed: options.seed,
             team: options.team,
             seat: options.seat,
+            bothCars: options.bothCars,
             circuits: specs,
             rounds: options.rounds,
             distance: options.distance,
@@ -164,7 +168,7 @@ export const useSeasonStore = create<SeasonStore>((set, get) => {
     qualify: (risks) => step((season) => qualify(season, risks)),
     finishQualifying: () => step(finishQualifying),
 
-    goToGrid: async (strategy) => {
+    goToGrid: async (strategy, mateStrategy = strategy) => {
       const { season } = get()
       if (!season || season.stage !== 'race') return false
       const round = currentRound(season)
@@ -196,6 +200,7 @@ export const useSeasonStore = create<SeasonStore>((set, get) => {
             seed: round.seed,
             rainChance: round.rainChance,
             driver: season.driver,
+            mate: season.bothCars ? { driver: teamMate(season), strategy: mateStrategy } : undefined,
             grid: season.qualifying?.grid ?? undefined,
             tuning: raceTuning(season),
           },
@@ -203,7 +208,8 @@ export const useSeasonStore = create<SeasonStore>((set, get) => {
       return true
     },
 
-    simulate: (strategy) => step((season) => recordRace(season, simulateRace(season, strategy), true)),
+    simulate: (strategy, mateStrategy) =>
+      step((season) => recordRace(season, simulateRace(season, strategy, mateStrategy), true)),
     buy: (area) => step((season) => buyUpgrade(season, area)),
     next: () => step(nextRound),
   }

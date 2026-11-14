@@ -47,6 +47,7 @@ export function SeasonSetup() {
 
   const [team, setTeam] = useState(4)
   const [seat, setSeat] = useState(0)
+  const [bothCars, setBothCars] = useState(false)
   const [rounds, setRounds] = useState<number>(5)
   const [distance, setDistance] = useState<Distance>('sprint')
   const [extra, setExtra] = useState<string[]>([])
@@ -110,7 +111,8 @@ export function SeasonSetup() {
       <section className="season-card" aria-labelledby="seat-title">
         <h2 id="seat-title">2. Your car</h2>
         <p className="season-note">
-          You call the races for one car. The engineer runs the other, on the same development.
+          This is the car you qualify, and the one whose championship position is yours. Both cars share the same
+          development.
         </p>
         <div className="seat-row" role="radiogroup" aria-label="Driver">
           {drivers.map((d, i) => (
@@ -134,8 +136,34 @@ export function SeasonSetup() {
         </div>
       </section>
 
+      <section className="season-card" aria-labelledby="cars-title">
+        <h2 id="cars-title">3. On race day</h2>
+        <div className="choice-row" role="radiogroup" aria-label="How many cars you run in the races">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!bothCars}
+            className={!bothCars ? 'choice is-chosen' : 'choice'}
+            onClick={() => setBothCars(false)}
+          >
+            <strong>One car</strong>
+            <span>You call the race for {DRIVERS[drivers[seat]].name}. The engineer runs the other car.</span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={bothCars}
+            className={bothCars ? 'choice is-chosen' : 'choice'}
+            onClick={() => setBothCars(true)}
+          >
+            <strong>Both cars</strong>
+            <span>You call the race for both. Stop them on the same lap and the second one queues for the box.</span>
+          </button>
+        </div>
+      </section>
+
       <section className="season-card" aria-labelledby="shape-title">
-        <h2 id="shape-title">3. The season</h2>
+        <h2 id="shape-title">4. The season</h2>
         <div className="shape-grid">
           <div>
             <h3>Rounds</h3>
@@ -219,12 +247,13 @@ export function SeasonSetup() {
           className="cta"
           data-coach="season-start"
           disabled={busy}
-          onClick={() => void begin({ team, seat, rounds, distance, seed, extra: chosen })}
+          onClick={() => void begin({ team, seat, bothCars, rounds, distance, seed, extra: chosen })}
         >
           {busy ? 'Setting up…' : 'Start the season'} <span aria-hidden="true">→</span>
         </button>
         <span className="season-note">
-          {TEAMS[team].name}, {DRIVERS[drivers[seat]].name}: {rounds} rounds on {circuits} circuits.
+          {TEAMS[team].name}, {DRIVERS[drivers[seat]].name}
+          {bothCars ? ' and both cars on race day' : ''}: {rounds} rounds on {circuits} circuits.
         </span>
       </div>
     </div>

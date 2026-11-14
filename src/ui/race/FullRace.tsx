@@ -397,6 +397,8 @@ function describe(entry: RaceLog): string {
       return `Fastest lap: ${who}, ${formatLapTime(entry.value)}`
     case 'slowstop':
       return `${who} has a slow stop (${(entry.value ?? 0).toFixed(1)} s stationary)`
+    case 'stack':
+      return `${who} waits ${(entry.value ?? 0).toFixed(1)} s behind a team-mate in the pits`
     case 'penalty':
       return `${who}: ${entry.value} s penalty for using only one dry compound`
     case 'flag':
