@@ -41,6 +41,13 @@ top bar says what to do there, makes the button it is talking about glow, and of
 next step once the screen's job is done. The top bar ticks off the steps done for the
 circuit that is open.
 
+### Replay
+
+A finished race, from the Race Engine or from the pit-wall debrief, can be watched back on
+the track map. The camera rides along with any car or shows the whole circuit, a bar moves
+through the race, and buttons jump to the start, the safety cars, the weather changes, the
+followed car's stops and passes, and the flag.
+
 ### Sound
 
 The test drive has an engine note, and the pit wall has start lights, wheel guns at your
@@ -117,6 +124,10 @@ public/drivers/  pre-trained drivers for the preset circuits
   season's seed, so the same choices always give the same season. The race itself is the
   ordinary race engine, given the qualifying grid and a list of how each car differs from
   the standard one.
+- **A replay needs only the lap times.** The lap-level engine knows when each car crossed
+  the line and nothing in between, which is enough: between two crossings a car is that
+  share of the way round. A lap that ends in a stop is driven at racing speed with the stop
+  spent at the end of it.
 - **A team has one pit box.** Two team-mates stopping on the same lap arrive one after
   the other, and the second waits until the first has gone and the crew has turned round.
   It applies to every team, so a safety car that brings a whole team in costs its second

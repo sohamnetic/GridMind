@@ -5,7 +5,9 @@ import type { RaceState } from '../../core/race/engine'
 import { DRIVERS, TEAMS } from '../../core/race/grid'
 import {
   buildReplay,
+  replayDistances,
   replayFractions,
+  replayInPit,
   replayLap,
   replayMoments,
   replayOrder,
@@ -201,6 +203,12 @@ export function RaceReplay({ race, def, focus, title, onClose }: Props) {
   const current = [...moments].reverse().find((m) => m.time <= shown + 1)
   const lap = replayLap(replay, shown)
   const order = useMemo(() => replayOrder(replay, shown), [replay, shown])
+  // Who has gone from the track and who is in the pits, by the same clock the map is drawn from.
+  const status = useMemo(() => {
+    const distance = new Float32Array(replay.crossings.length)
+    replayDistances(replay, shown, distance)
+    return Array.from(distance, (d, car) => (d < 0 ? 'out' : replayInPit(replay, car, shown) ? 'pit' : 'running'))
+  }, [replay, shown])
   const x = (time: number) => (replay.duration > 0 ? (time / replay.duration) * 1000 : 0)
   const leaderTimes = replay.crossings[race.order[0]]
   const lapTime = (n: number) => leaderTimes[Math.min(leaderTimes.length - 1, Math.max(0, n))] ?? 0
@@ -237,7 +245,7 @@ export function RaceReplay({ race, def, focus, title, onClose }: Props) {
         </div>
         <ol className="replay-order" aria-label="Running order">
           {order.map((driver, place) => {
-            const out = replay.outLap[driver] > 0 && replay.outLap[driver] <= lap
+            const out = status[driver] === 'out'
             return (
               <li key={driver} className={driver === follow ? 'is-followed' : out ? 'is-out' : undefined}>
                 <button type="button" onClick={() => setFollow(driver)} title={`Follow ${DRIVERS[driver].name}`}>
@@ -248,6 +256,7 @@ export function RaceReplay({ race, def, focus, title, onClose }: Props) {
                     aria-hidden="true"
                   />
                   {DRIVERS[driver].code}
+                  {status[driver] === 'pit' && <span className="replay-pit">PIT</span>}
                 </button>
               </li>
             )

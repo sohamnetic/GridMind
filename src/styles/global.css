@@ -534,3 +534,14 @@ a {
     padding-right: 10px;
   }
 }
+
+/* On a phone the Season and sound buttons leave no room for the open screen's name: the lit chip says where you are. */
+@media (max-width: 480px) {
+  .step.is-active .step-name {
+    display: none;
+  }
+
+  .step.is-active {
+    padding-right: 6px;
+  }
+}
