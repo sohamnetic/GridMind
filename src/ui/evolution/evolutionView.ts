@@ -34,6 +34,12 @@ export class EvolutionView {
   private readonly ctx: CanvasRenderingContext2D
   private readonly layer = document.createElement('canvas')
   private layerDirty = true
+  /** The camera the cached layer was drawn for, and how far the layer reaches beyond the view on each side (px). */
+  private layerCam: Camera = { x: 0, y: 0, zoom: 1 }
+  private marginX = 0
+  private marginY = 0
+  /** The camera has moved since the last frame was drawn. */
+  private camMoved = false
   private cam: Camera = { x: 0, y: 0, zoom: 1 }
   private w = 1
   private h = 1
@@ -81,8 +87,8 @@ export class EvolutionView {
     this.w = Math.max(1, w)
     this.h = Math.max(1, h)
     this.dpr = dpr
-    this.canvas.width = this.layer.width = Math.round(this.w * dpr)
-    this.canvas.height = this.layer.height = Math.round(this.h * dpr)
+    this.canvas.width = Math.round(this.w * dpr)
+    this.canvas.height = Math.round(this.h * dpr)
     if (!this.userView) this.fit()
     this.layerDirty = true
   }
@@ -160,13 +166,20 @@ export class EvolutionView {
     this.raf = requestAnimationFrame(this.frame)
     const source = this.source
     this.ride(source)
-    if (!this.layerDirty && source.seq === this.lastSeq) return
+    if (!this.layerDirty && !this.camMoved && source.seq === this.lastSeq) return
     this.lastSeq = source.seq
+    this.camMoved = false
     if (this.layerDirty) this.drawLayer()
 
     const { ctx, dpr, cam } = this
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.drawImage(this.layer, 0, 0)
+    // The layer was drawn for a camera that may since have moved a little: slide it to match.
+    const lc = this.layerCam
+    ctx.drawImage(
+      this.layer,
+      Math.round(((lc.x - cam.x) * cam.zoom - this.marginX) * dpr),
+      Math.round(((lc.y - cam.y) * cam.zoom - this.marginY) * dpr),
+    )
     const cars = source.cars
     if (!cars || !this.track) return
 
@@ -263,14 +276,30 @@ export class EvolutionView {
     const dx = cars[o] - this.cam.x
     const dy = cars[o + 1] - this.cam.y
     const dz = zoom - this.cam.zoom
-    if (Math.abs(dx) + Math.abs(dy) < 0.02 && Math.abs(dz) < 0.001) return
+    if (Math.abs(dx) + Math.abs(dy) < 0.02 && dz === 0) return
     // A jump of half the view or more is a seek, not a car driving: cut to it.
     const far = Math.hypot(dx, dy) * this.cam.zoom > Math.min(this.w, this.h) * 0.5
     const ease = far ? 1 : 0.2
     this.cam.x += dx * ease
     this.cam.y += dy * ease
-    this.cam.zoom += dz * 0.12
-    this.layerDirty = true
+    // Ease the zoom, then land on it exactly so the cached layer can be kept.
+    this.cam.zoom = Math.abs(dz) < 0.004 ? zoom : this.cam.zoom + dz * 0.12
+    this.camMoved = true
+    if (this.layerStale()) this.layerDirty = true
+  }
+
+  /**
+   * Whether the cached layer no longer covers the view. While following, the
+   * layer is drawn larger than the view, so the camera can travel some way
+   * before the track has to be drawn again.
+   */
+  private layerStale(): boolean {
+    const lc = this.layerCam
+    if (this.cam.zoom !== lc.zoom) return true
+    return (
+      Math.abs(this.cam.x - lc.x) * this.cam.zoom > this.marginX - 2 ||
+      Math.abs(this.cam.y - lc.y) * this.cam.zoom > this.marginY - 2
+    )
   }
 
   private arrow(x: number, y: number, heading: number, size: number): void {
@@ -292,12 +321,24 @@ export class EvolutionView {
     this.layerDirty = false
     const ctx = this.layer.getContext('2d')
     if (!ctx) return
+    // A camera riding with a car gets a layer half a view larger all round.
+    this.marginX = this.following ? Math.round(this.w / 2) : 0
+    this.marginY = this.following ? Math.round(this.h / 2) : 0
+    this.layerCam = { ...this.cam }
+    const lw = this.w + 2 * this.marginX
+    const lh = this.h + 2 * this.marginY
+    const pw = Math.round(lw * this.dpr)
+    const ph = Math.round(lh * this.dpr)
+    if (this.layer.width !== pw || this.layer.height !== ph) {
+      this.layer.width = pw
+      this.layer.height = ph
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = TRACK_COLORS.ground
     ctx.fillRect(0, 0, this.layer.width, this.layer.height)
     if (!this.paths) return
 
-    applyCamera(ctx, this.cam, this.w, this.h, this.dpr)
+    applyCamera(ctx, this.cam, lw, lh, this.dpr)
     drawTrack(ctx, this.paths, { showCentreLine: false, zoom: this.cam.zoom })
 
     const ghost = this.ghost

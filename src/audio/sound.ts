@@ -11,6 +11,14 @@ import { engineNote, flagTune } from './notes'
 
 const PREFERENCE = 'gridmind:sound'
 
+/**
+ * How loud the one-shot cues are against the gains written beside them.
+ * Set by measurement: recorded from the page, a cue should peak between
+ * about -18 and -10 dB of full scale, well clear of the engine note under it
+ * and with room left when several sound at once.
+ */
+const CUE_LEVEL = 3.6
+
 type Wave = OscillatorType
 
 interface ToneSpec {
@@ -126,7 +134,7 @@ class Sound {
     osc.frequency.setValueAtTime(spec.frequency, start)
     if (spec.slideTo) osc.frequency.exponentialRampToValueAtTime(spec.slideTo, end)
     const gain = ctx.createGain()
-    const level = spec.gain ?? 0.2
+    const level = (spec.gain ?? 0.2) * CUE_LEVEL
     // A few milliseconds of fade either end, or every note clicks.
     gain.gain.setValueAtTime(0, start)
     gain.gain.linearRampToValueAtTime(level, start + 0.008)
@@ -163,7 +171,7 @@ class Sound {
     filter.frequency.value = spec.band
     filter.Q.value = 1.2
     const gain = ctx.createGain()
-    const level = spec.gain ?? 0.2
+    const level = (spec.gain ?? 0.2) * CUE_LEVEL
     gain.gain.setValueAtTime(0, start)
     gain.gain.linearRampToValueAtTime(level, start + 0.01)
     gain.gain.linearRampToValueAtTime(0, end)
@@ -202,8 +210,8 @@ class Sound {
 
   safetyCar(): void {
     for (let i = 0; i < 3; i++) {
-      this.tone({ frequency: 700, at: i * 0.3, duration: 0.14, wave: 'square', gain: 0.05 })
-      this.tone({ frequency: 520, at: i * 0.3 + 0.15, duration: 0.14, wave: 'square', gain: 0.05 })
+      this.tone({ frequency: 700, at: i * 0.3, duration: 0.14, wave: 'square', gain: 0.07 })
+      this.tone({ frequency: 520, at: i * 0.3 + 0.15, duration: 0.14, wave: 'square', gain: 0.07 })
     }
   }
 
@@ -224,7 +232,7 @@ class Sound {
   /** The chequered flag, for a car finishing in `position`. */
   flag(position: number): void {
     flagTune(position).forEach((frequency, i) => {
-      this.tone({ frequency, at: i * 0.13, duration: i === 0 ? 0.12 : 0.22, wave: 'triangle', gain: 0.14 })
+      this.tone({ frequency, at: i * 0.13, duration: i === 0 ? 0.12 : 0.22, wave: 'triangle', gain: 0.09 })
     })
   }
 
@@ -304,7 +312,7 @@ class Sound {
     for (const osc of voice.oscillators) osc.frequency.setTargetAtTime(note.frequency, now, 0.04)
     // On the throttle the note is louder and brighter; off it, the engine burbles.
     voice.filter.frequency.setTargetAtTime(350 + 1500 * note.revs * (0.45 + 0.55 * throttle), now, 0.06)
-    voice.gain.gain.setTargetAtTime(0.035 + 0.07 * throttle, now, 0.08)
+    voice.gain.gain.setTargetAtTime(0.045 + 0.06 * throttle, now, 0.08)
   }
 
   engineStop(): void {
