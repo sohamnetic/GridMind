@@ -23,6 +23,7 @@ import { PITWALL_SPEEDS, pitwallFrame, teamMateOf, tickPitWall, usePitWallStore 
 import { useStudioStore } from '../../state/studioStore'
 import { PopulationCanvas } from '../components/PopulationCanvas'
 import { useTrackProfile } from '../race/useTrackProfile'
+import { RaceReplay } from '../race/RaceReplay'
 import { ProfileCard } from '../race/WheelRace'
 import { Debrief } from './Debrief'
 import { CarPanel, CarSwitch, PitWindow, Radio, rainWord, Tower, WeatherPanel } from './PitWallPanels'
@@ -92,6 +93,8 @@ export function LivePitWall() {
   const error = usePitWallStore((s) => s.error)
   const actions = usePitWallStore.getState()
   const study = useOptimiserStore((s) => s.study)
+  /** The finished race being watched back, if one is. */
+  const [watching, setWatching] = useState<RaceState | null>(null)
 
   const scene = useMemo(() => {
     const track = buildTrack(def)
@@ -167,14 +170,26 @@ export function LivePitWall() {
   if (active && phase === 'finished') {
     return (
       <div className="fullrace">
-        <Debrief
-          race={race}
-          driver={driver}
-          cars={cars}
-          onCar={actions.focus}
-          trackName={raceTrack?.name ?? def.name}
-          debrief={debrief}
-        />
+        {watching === race ? (
+          <div className="fullrace-main is-replay">
+            <RaceReplay
+              race={race}
+              def={def}
+              focus={driver}
+              title={raceTrack?.name ?? def.name}
+              onClose={() => setWatching(null)}
+            />
+          </div>
+        ) : (
+          <Debrief
+            race={race}
+            driver={driver}
+            cars={cars}
+            onCar={actions.focus}
+            trackName={raceTrack?.name ?? def.name}
+            debrief={debrief}
+          />
+        )}
         <aside className="studio-side evolution-side" aria-label="Result and radio">
           <section className="panel">
             <h2>Race over</h2>
@@ -182,6 +197,15 @@ export function LivePitWall() {
             {event && <p className="muted">{event.title}. The result is in the championship table.</p>}
             <button type="button" className="primary" data-coach="new-race" onClick={exit}>
               {event ? 'Back to the season' : 'New race'}
+            </button>
+            <button
+              type="button"
+              className="replay-open"
+              disabled={otherTrack}
+              title="Watch the race back on the track map, with a camera that can follow a car"
+              onClick={() => setWatching(watching === race ? null : race)}
+            >
+              {watching === race ? 'Back to the debrief' : 'Watch the replay'}
             </button>
           </section>
           <section className="panel">

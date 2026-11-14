@@ -14,6 +14,10 @@ export interface FrameSource {
   seq: number
   leader: number
   cars: Float32Array | null
+  /** A car for the camera to ride along with, or -1 (or nothing) for a camera that stays put. */
+  follow?: number
+  /** Pixels per metre while following. */
+  followZoom?: number
 }
 
 /** Per-car colours and labels, for races where each car is somebody. */
@@ -38,6 +42,9 @@ export class EvolutionView {
   private paths: TrackPaths | null = null
   private ghost: Float32Array | null = null
   private userView = false
+  /** The camera is riding with a car; the wheel then scales how close it sits. */
+  private following = false
+  private followScale = 1
   private raf = 0
   private lastSeq = -1
   private drag: { sx: number; sy: number; camX: number; camY: number } | null = null
@@ -107,6 +114,8 @@ export class EvolutionView {
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
+    // A camera that is riding with a car cannot be dragged off it.
+    if (this.following) return
     const p = this.local(e)
     this.drag = { sx: p.x, sy: p.y, camX: this.cam.x, camY: this.cam.y }
     try {
@@ -133,6 +142,10 @@ export class EvolutionView {
 
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault()
+    if (this.following) {
+      this.followScale = Math.min(4, Math.max(0.25, this.followScale * Math.exp(-e.deltaY * 0.0015)))
+      return
+    }
     const p = this.local(e)
     this.cam = zoomAt(this.cam, this.w, this.h, p.x, p.y, Math.exp(-e.deltaY * 0.0015))
     this.userView = true
@@ -146,6 +159,7 @@ export class EvolutionView {
   private readonly frame = (): void => {
     this.raf = requestAnimationFrame(this.frame)
     const source = this.source
+    this.ride(source)
     if (!this.layerDirty && source.seq === this.lastSeq) return
     this.lastSeq = source.seq
     if (this.layerDirty) this.drawLayer()
@@ -223,6 +237,40 @@ export class EvolutionView {
         ctx.fillText(style.labels[i] ?? '', p.x + 9, p.y - 7)
       }
     }
+  }
+
+  /** Moves the camera towards the car it is following, or back to the whole circuit when it stops following. */
+  private ride(source: FrameSource): void {
+    const car = source.follow ?? -1
+    const cars = source.cars
+    const o = car * FRAME_STRIDE
+    if (car < 0 || cars === null || o + 3 >= cars.length || cars[o + 3] !== CarStatus.Running) {
+      if (this.following) {
+        this.following = false
+        this.followScale = 1
+        this.fit()
+      }
+      return
+    }
+    const zoom = (source.followZoom ?? 2.5) * this.followScale
+    if (!this.following) {
+      // Cut straight to the car rather than swooping across the circuit.
+      this.following = true
+      this.cam = { x: cars[o], y: cars[o + 1], zoom }
+      this.layerDirty = true
+      return
+    }
+    const dx = cars[o] - this.cam.x
+    const dy = cars[o + 1] - this.cam.y
+    const dz = zoom - this.cam.zoom
+    if (Math.abs(dx) + Math.abs(dy) < 0.02 && Math.abs(dz) < 0.001) return
+    // A jump of half the view or more is a seek, not a car driving: cut to it.
+    const far = Math.hypot(dx, dy) * this.cam.zoom > Math.min(this.w, this.h) * 0.5
+    const ease = far ? 1 : 0.2
+    this.cam.x += dx * ease
+    this.cam.y += dy * ease
+    this.cam.zoom += dz * 0.12
+    this.layerDirty = true
   }
 
   private arrow(x: number, y: number, heading: number, size: number): void {

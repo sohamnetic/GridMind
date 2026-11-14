@@ -9,6 +9,7 @@ import { buildPitLane } from '../../core/track/pit'
 import { defaultLaps, LAP_OPTIONS, useFullRaceStore } from '../../state/fullRaceStore'
 import { useStudioStore } from '../../state/studioStore'
 import { GapChart, PositionChart, safetyPeriods, StintChart } from './RaceCharts'
+import { RaceReplay } from './RaceReplay'
 import { useTrackProfile } from './useTrackProfile'
 import { ProfileCard } from './WheelRace'
 
@@ -23,6 +24,8 @@ export function FullRace() {
   const selected = useFullRaceStore((s) => s.selected)
   const actions = useFullRaceStore.getState()
   const [showPasses, setShowPasses] = useState(false)
+  /** The race being watched back, if one is: a new race closes the replay of the old one. */
+  const [watching, setWatching] = useState<RaceState | null>(null)
 
   const scene = useMemo(() => {
     const track = buildTrack(def)
@@ -38,11 +41,21 @@ export function FullRace() {
 
   const race = result?.race ?? null
   const lap = race ? Math.min(viewLap, race.totalLaps) : 0
+  const replaying = race !== null && watching === race
+  const sameTrack = result?.trackId === def.id
 
   return (
     <div className="fullrace">
-      <div className="fullrace-main">
-        {!race || !result ? (
+      <div className={replaying ? 'fullrace-main is-replay' : 'fullrace-main'}>
+        {replaying && race && result ? (
+          <RaceReplay
+            race={race}
+            def={def}
+            focus={selected ?? race.order[0]}
+            title={result.trackName}
+            onClose={() => setWatching(null)}
+          />
+        ) : !race || !result ? (
           <div className="fullrace-empty">
             <h1>Full race</h1>
             <p>
@@ -160,6 +173,21 @@ export function FullRace() {
               Clear highlight
             </button>
           </div>
+          {race && (
+            <button
+              type="button"
+              className="replay-open"
+              disabled={!sameTrack || !scene.track}
+              title={
+                sameTrack
+                  ? 'Watch the race back on the track map, with a camera that can follow a car'
+                  : 'The race was run on another circuit: open that circuit to watch it back'
+              }
+              onClick={() => setWatching(replaying ? null : race)}
+            >
+              {replaying ? 'Back to the charts' : 'Watch the replay'}
+            </button>
+          )}
         </section>
 
         {race && result && (
