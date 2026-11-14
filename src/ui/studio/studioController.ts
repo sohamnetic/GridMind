@@ -1,5 +1,6 @@
+import { sound } from '../../audio/sound'
 import { clamp } from '../../core/math/util'
-import { createCar, DEFAULT_CAR, stepCar, type CarInput, type CarState } from '../../core/physics/car'
+import { createCar, DEFAULT_CAR, stepCar, topSpeed, type CarInput, type CarState } from '../../core/physics/car'
 import {
   createLapTimer,
   relativePosition,
@@ -14,6 +15,9 @@ import { applyCamera, fitCamera, screenToWorld, worldToScreen, zoomAt, type Came
 import { drawCar } from '../../render/carRenderer'
 import { drawTrack, TRACK_COLORS, type TrackPaths } from '../../render/trackRenderer'
 import { useStudioStore, type StudioTool } from '../../state/studioStore'
+
+/** Top speed of the test-drive car, for the pitch of its engine note. */
+const TOP_SPEED = topSpeed(DEFAULT_CAR)
 
 export interface HudState {
   speedKmh: number
@@ -517,6 +521,7 @@ export class StudioController {
     this.lastFrame = performance.now()
     this.accumulator = 0
     this.hudClock = 0
+    sound.engineStart()
     this.raf = requestAnimationFrame(this.tick)
   }
 
@@ -537,6 +542,7 @@ export class StudioController {
   private stopDrive(): void {
     cancelAnimationFrame(this.raf)
     this.raf = 0
+    sound.engineStop()
     this.car = null
     this.timer = null
     this.keys.clear()
@@ -563,6 +569,8 @@ export class StudioController {
 
     // Chase camera: looks ahead of the car and pulls back with speed.
     const active = this.car ?? car
+    if (active.crashed) sound.engineStop()
+    else sound.engineUpdate(active.speed / TOP_SPEED, this.input.throttle)
     const lead = active.speed * 0.35
     const tx = active.x + Math.cos(active.heading) * lead
     const ty = active.y + Math.sin(active.heading) * lead
@@ -595,6 +603,7 @@ export class StudioController {
 
   private stepDrive(track: BuiltTrack, car: CarState, timer: LapTimer): void {
     if (car.crashed) {
+      if (this.crashClock === 0) sound.crash()
       // Sit in the wall for a moment, then put the car back on the road.
       this.crashClock += PHYSICS_DT
       if (this.crashClock > 1.2) {

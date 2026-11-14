@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
+import '../../audio/gameSounds'
+import { sound } from '../../audio/sound'
 import { decodeTrack, sharedTrackParam } from '../../share/urlCodec'
 import { useStudioStore } from '../../state/studioStore'
 import { DriverEvolution } from '../evolution/DriverEvolution'
@@ -20,6 +22,10 @@ export function App() {
   const drivers = useDrivers()
   const status = useFlowStatus(drivers)
   const [coachOn, setCoachOn] = useCoachPreference()
+  const soundOn = useSyncExternalStore(
+    (listener) => sound.subscribe(listener),
+    () => sound.enabled,
+  )
   const done = new Set(flowSteps(status).filter((s) => s.done).map((s) => s.id))
   const next = nextStep(status).id
 
@@ -114,6 +120,29 @@ export function App() {
             </svg>
             <span>Season</span>
           </a>
+          <button
+            type="button"
+            className={soundOn ? 'sound-toggle is-on' : 'sound-toggle'}
+            aria-pressed={soundOn}
+            title={soundOn ? 'Sound is on: click to mute' : 'Sound is off: click to turn it on'}
+            aria-label={soundOn ? 'Mute sound' : 'Turn sound on'}
+            onClick={() => sound.setEnabled(!soundOn)}
+          >
+            <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+              <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5Z" fill="currentColor" />
+              {soundOn ? (
+                <path
+                  d="M15 9a4.2 4.2 0 0 1 0 6M17.4 6.6a7.6 7.6 0 0 1 0 10.8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <path d="m15.5 9.5 5 5m0-5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              )}
+            </svg>
+          </button>
           {!coachOn && active !== 'home' && (
             <button type="button" className="coach-toggle" onClick={() => setCoachOn(true)} title="Show what to do on this screen">
               Coach

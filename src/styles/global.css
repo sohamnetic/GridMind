@@ -278,6 +278,26 @@ a {
   text-decoration: none;
 }
 
+.sound-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.sound-toggle.is-on {
+  color: var(--text);
+}
+
+.sound-toggle:hover {
+  border-color: var(--text-dim);
+}
+
 .season-link:hover,
 .season-link.is-active {
   border-color: var(--warn);

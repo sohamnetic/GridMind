@@ -41,6 +41,13 @@ top bar says what to do there, makes the button it is talking about glow, and of
 next step once the screen's job is done. The top bar ticks off the steps done for the
 circuit that is open.
 
+### Sound
+
+The test drive has an engine note, and the pit wall has start lights, wheel guns at your
+stops, a tone when the clock stops for a call and a short tune at the flag. All of it is
+generated in the browser from oscillators and filtered noise, so there are no audio files.
+The speaker button in the top bar mutes it.
+
 ## How it is built
 
 ### One rule
@@ -78,6 +85,7 @@ src/
     strategy/    candidate strategies, Monte Carlo runs, statistics, staged search
     pitwall/     re-planning mid-race, rollouts, decision points, team radio, debrief
     season/      championship: calendar, practice, knockout qualifying, points, development
+  audio/         generated sound: the engine note and the pit-wall and season cues
   share/         a circuit packed into a link
   workers/       training, racing, Monte Carlo pool, pit-wall advice and debrief
   render/        canvas drawing of tracks and cars
